@@ -1,0 +1,19 @@
+{
+  "name": "food-travel",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^7.3.7",
+    "vitest": "^3.2.7"
+  }
+}

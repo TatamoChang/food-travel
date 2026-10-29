@@ -1,0 +1,58 @@
+{
+  "initialUnlocked": ["pizza"],
+  "stages": [
+    {
+      "id": "s1",
+      "title": "抵達羅馬",
+      "requirements": [
+        { "itemId": "pizza_b", "count": 1 },
+        { "itemId": "pizza_c", "count": 1 }
+      ],
+      "reward": 30,
+      "unlocks": ["sushi"]
+    },
+    {
+      "id": "s2",
+      "title": "飛往東京",
+      "requirements": [
+        { "itemId": "pizza_d", "count": 1 },
+        { "itemId": "sushi_c", "count": 1 }
+      ],
+      "reward": 60,
+      "unlocks": ["croissant"]
+    },
+    {
+      "id": "s3",
+      "title": "巴黎的早晨",
+      "requirements": [
+        { "itemId": "pizza_d", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 },
+        { "itemId": "croissant_c", "count": 1 }
+      ],
+      "reward": 100,
+      "unlocks": []
+    },
+    {
+      "id": "s4",
+      "title": "美食家的挑戰",
+      "requirements": [
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 },
+        { "itemId": "croissant_d", "count": 1 }
+      ],
+      "reward": 200,
+      "unlocks": []
+    },
+    {
+      "id": "s5",
+      "title": "環球盛宴",
+      "requirements": [
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "sushi_e", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 }
+      ],
+      "reward": 500,
+      "unlocks": []
+    }
+  ]
+}

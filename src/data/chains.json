@@ -1,0 +1,44 @@
+{
+  "stageLabels": ["A", "B", "C", "D", "E"],
+  "chains": [
+    {
+      "id": "pizza",
+      "region": "義大利",
+      "name": "披薩",
+      "generator": { "id": "gen_pizza", "name": "麵粉袋", "energyCost": 1 },
+      "stages": [
+        { "id": "pizza_a", "name": "麵團" },
+        { "id": "pizza_b", "name": "披薩餅皮" },
+        { "id": "pizza_c", "name": "番茄醬餅皮" },
+        { "id": "pizza_d", "name": "起司披薩生胚" },
+        { "id": "pizza_e", "name": "瑪格麗特披薩" }
+      ]
+    },
+    {
+      "id": "sushi",
+      "region": "日本",
+      "name": "壽司",
+      "generator": { "id": "gen_sushi", "name": "米桶", "energyCost": 1 },
+      "stages": [
+        { "id": "sushi_a", "name": "白飯" },
+        { "id": "sushi_b", "name": "飯糰" },
+        { "id": "sushi_c", "name": "握壽司" },
+        { "id": "sushi_d", "name": "壽司拼盤" },
+        { "id": "sushi_e", "name": "豪華壽司船" }
+      ]
+    },
+    {
+      "id": "croissant",
+      "region": "法國",
+      "name": "可頌",
+      "generator": { "id": "gen_croissant", "name": "奶油盒", "energyCost": 1 },
+      "stages": [
+        { "id": "croissant_a", "name": "奶油塊" },
+        { "id": "croissant_b", "name": "酥皮麵團" },
+        { "id": "croissant_c", "name": "可頌生胚" },
+        { "id": "croissant_d", "name": "烤可頌" },
+        { "id": "croissant_e", "name": "可頌早餐盤" }
+      ]
+    }
+  ]
+}
