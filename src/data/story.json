@@ -9,6 +9,7 @@
         { "itemId": "pizza_c", "count": 1 }
       ],
       "reward": 30,
+      "rewardEnergy": 5,
       "unlocks": ["sushi"]
     },
     {
@@ -19,6 +20,7 @@
         { "itemId": "sushi_c", "count": 1 }
       ],
       "reward": 60,
+      "rewardEnergy": 10,
       "unlocks": ["croissant"]
     },
     {
@@ -30,6 +32,7 @@
         { "itemId": "croissant_c", "count": 1 }
       ],
       "reward": 100,
+      "rewardEnergy": 10,
       "unlocks": []
     },
     {
@@ -41,6 +44,7 @@
         { "itemId": "croissant_d", "count": 1 }
       ],
       "reward": 200,
+      "rewardEnergy": 15,
       "unlocks": []
     },
     {
@@ -52,6 +56,7 @@
         { "itemId": "croissant_e", "count": 1 }
       ],
       "reward": 500,
+      "rewardEnergy": 25,
       "unlocks": []
     }
   ]

@@ -1,0 +1,11 @@
+{
+  "products": [
+    { "id": "energy_small", "name": "小電池", "cost": 30, "effect": { "type": "energy", "amount": 5 } },
+    { "id": "energy_medium", "name": "電力罐", "cost": 110, "effect": { "type": "energy", "amount": 20 } },
+    { "id": "energy_large", "name": "電力箱", "cost": 400, "effect": { "type": "energy", "amount": 80 } },
+    { "id": "cap_plus_5", "name": "大容量電池", "cost": 300, "once": true, "effect": { "type": "maxEnergy", "amount": 5 } },
+    { "id": "cap_plus_10", "name": "超級電池", "cost": 1000, "once": true, "effect": { "type": "maxEnergy", "amount": 10 } },
+    { "id": "cap_boost_30m", "name": "咖啡加持", "cost": 80, "effect": { "type": "maxEnergyBoost", "amount": 10, "durationMinutes": 30 } },
+    { "id": "cap_boost_2h", "name": "美食節狂歡", "cost": 200, "effect": { "type": "maxEnergyBoost", "amount": 20, "durationMinutes": 120 } }
+  ]
+}

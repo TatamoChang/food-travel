@@ -12,6 +12,7 @@ export interface StoryStage {
   title: string;
   requirements: Requirement[];
   reward: number;
+  rewardEnergy: number;
   unlocks: string[];
 }
 

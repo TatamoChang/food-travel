@@ -5,8 +5,16 @@ import { Game, newState } from "../src/core/game";
 import { generateRandomOrder, story, tierCap } from "../src/core/orders";
 import { chains, getItem } from "../src/core/registry";
 import { mulberry32 } from "../src/core/rng";
+import { getProduct, products } from "../src/core/shop";
 
 describe("story data", () => {
+  it("every stage rewards coins and energy", () => {
+    for (const stage of story.stages) {
+      expect(stage.reward).toBeGreaterThan(0);
+      expect(stage.rewardEnergy).toBeGreaterThan(0);
+    }
+  });
+
   it("only references existing items from chains unlocked by then", () => {
     const unlocked = new Set(story.initialUnlocked);
     for (const stage of story.stages) {
@@ -58,6 +66,148 @@ describe("Energy", () => {
     expect(e.value).toBe(2);
     e.sync(100_000);
     expect(e.value).toBe(5);
+  });
+});
+
+describe("Energy.add", () => {
+  it("can exceed max, and regen only resumes once below max", () => {
+    const e = new Energy({ value: 5, updatedAt: 0 }, 5, 1000);
+    e.add(10, 0);
+    expect(e.value).toBe(15);
+    expect(e.spend(11, 50_000)).toBe(true);
+    expect(e.value).toBe(4);
+    expect(e.msToNext(50_500)).toBe(500);
+    e.sync(51_000);
+    expect(e.value).toBe(5);
+  });
+});
+
+describe("Shop", () => {
+  const rich = (coins: number, energy = 3) => {
+    const state = newState(0);
+    state.coins = coins;
+    state.energy.value = energy;
+    return new Game(state, () => 0, mulberry32(1));
+  };
+
+  it("has valid, unique products", () => {
+    expect(new Set(products.map((p) => p.id)).size).toBe(products.length);
+    for (const p of products) {
+      expect(p.cost).toBeGreaterThan(0);
+      expect(p.effect.amount).toBeGreaterThan(0);
+    }
+  });
+
+  it("buying energy spends coins and grants energy", () => {
+    const p = products[0];
+    const g = rich(p.cost + 7);
+    expect(g.buy(p.id)).toEqual({ ok: true });
+    expect(g.coins).toBe(7);
+    expect(g.energy.value).toBe(3 + p.effect.amount);
+  });
+
+  it("rejects purchases without enough coins or with unknown ids", () => {
+    const p = products[0];
+    const g = rich(p.cost - 1);
+    expect(g.buy(p.id)).toEqual({ ok: false, reason: "no-coins" });
+    expect(g.buy("nope")).toEqual({ ok: false, reason: "unknown-product" });
+    expect(g.coins).toBe(p.cost - 1);
+    expect(g.energy.value).toBe(3);
+  });
+});
+
+describe("Shop energy cap", () => {
+  const MIN = 60_000;
+  const setup = (coins = 5000) => {
+    let t = 0;
+    const state = newState(0);
+    state.coins = coins;
+    const g = new Game(state, () => t, mulberry32(1));
+    return { g, advance: (ms: number) => (t += ms), clock: () => t };
+  };
+
+  it("permanent cap upgrades can only be bought once", () => {
+    const { g } = setup();
+    const p = getProduct("cap_plus_5")!;
+    expect(g.energy.max).toBe(20);
+    expect(g.buy(p.id)).toEqual({ ok: true });
+    expect(g.energy.max).toBe(25);
+    expect(g.energy.value).toBe(20);
+    const coins = g.coins;
+    expect(g.buy(p.id)).toEqual({ ok: false, reason: "already-purchased" });
+    expect(g.coins).toBe(coins);
+    expect(g.isPurchased(p.id)).toBe(true);
+
+    expect(g.buy("cap_plus_10").ok).toBe(true);
+    expect(g.energy.max).toBe(35);
+  });
+
+  it("a higher cap lets energy regenerate up to it without an instant payout", () => {
+    const { g, advance } = setup();
+    advance(10 * 60 * MIN); // sit at full energy for a long time
+    g.buy("cap_plus_5");
+    expect(g.energy.value).toBe(20);
+    advance(MIN);
+    g.energy.sync(advance(0));
+    expect(g.energy.value).toBe(21);
+  });
+
+  it("temporary boost raises the cap, expires, and extends when re-bought", () => {
+    const { g, advance, clock } = setup();
+    g.buy("cap_boost_30m");
+    expect(g.energy.max).toBe(30);
+    expect(g.boostExpiresAt("cap_boost_30m")).toBe(30 * MIN);
+
+    advance(10 * MIN);
+    g.buy("cap_boost_30m");
+    expect(g.boostExpiresAt("cap_boost_30m")).toBe(60 * MIN);
+    expect(g.energy.max).toBe(30);
+
+    g.buy("cap_boost_2h");
+    expect(g.energy.max).toBe(50);
+
+    advance(51 * MIN); // 61 min in: 30m boost gone, 2h boost still on
+    g.tick();
+    expect(g.boostExpiresAt("cap_boost_30m")).toBeNull();
+    expect(g.energy.max).toBe(40);
+
+    advance(120 * MIN);
+    g.tick();
+    expect(g.energy.max).toBe(20);
+    expect(clock()).toBe(181 * MIN);
+  });
+
+  it("keeps energy above the cap after a boost ends, without regen", () => {
+    const { g, advance } = setup();
+    g.buy("cap_boost_30m");
+    g.buy("energy_large");
+    expect(g.energy.value).toBe(100);
+    advance(31 * MIN);
+    g.tick();
+    expect(g.energy.max).toBe(20);
+    expect(g.energy.value).toBe(100);
+  });
+
+  it("persists upgrades and active boosts through a save", () => {
+    const { g } = setup();
+    g.buy("cap_plus_5");
+    g.buy("cap_boost_30m");
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const g2 = new Game(snap, () => 5 * MIN, mulberry32(1));
+    expect(g2.energy.max).toBe(35);
+    expect(g2.isPurchased("cap_plus_5")).toBe(true);
+    expect(g2.boostExpiresAt("cap_boost_30m")).toBe(30 * MIN);
+    const g3 = new Game(snap, () => 31 * MIN, mulberry32(1));
+    expect(g3.energy.max).toBe(25);
+  });
+
+  it("loads old saves that lack the new fields", () => {
+    const old: Partial<ReturnType<Game["snapshot"]>> = newState(0);
+    delete old.maxEnergyBonus;
+    delete old.purchased;
+    delete old.boosts;
+    const g = new Game(old as ReturnType<Game["snapshot"]>, () => 0, mulberry32(1));
+    expect(g.energy.max).toBe(20);
   });
 });
 
@@ -114,6 +264,7 @@ describe("Game", () => {
     expect(g.board.cells).not.toContain("pizza_c");
     expect(g.stageIndex).toBe(1);
     expect(g.coins).toBe(story.stages[0].reward);
+    expect(g.energy.value).toBe(20 + story.stages[0].rewardEnergy);
     expect(g.unlocked).toContain("sushi");
     expect(g.board.cells).toContain("gen_sushi");
   });

@@ -13,7 +13,7 @@ export class Energy {
 
   constructor(
     snap: EnergySnapshot,
-    readonly max = ENERGY_MAX,
+    public max = ENERGY_MAX,
     readonly regenMs = ENERGY_REGEN_MS,
   ) {
     this.value = snap.value;
@@ -38,6 +38,19 @@ export class Energy {
     if (this.value >= this.max) this.updatedAt = now;
     this.value -= n;
     return true;
+  }
+
+  /** Change the cap. Regen up to now is settled against the old cap first, so a stale timer can't pay out at once. */
+  setMax(n: number, now: number) {
+    this.sync(now);
+    this.max = n;
+    if (this.value >= n) this.updatedAt = now;
+  }
+
+  /** Grant energy beyond the cap (purchases and rewards are not limited by max). */
+  add(n: number, now: number) {
+    this.sync(now);
+    this.value += n;
   }
 
   /** Milliseconds until the next point is regenerated, or 0 when full. */

@@ -1,11 +1,11 @@
-import { Application, Container, Graphics, Text, type FederatedPointerEvent } from "pixi.js";
+import { Application, Container, Graphics, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
 import type { Game } from "../core/game";
 import { story, type Requirement } from "../core/orders";
 import { getItem, stageLabels } from "../core/registry";
-
-export const VIEW_W = 360;
-export const VIEW_H = 720;
+import { VIEW_H, VIEW_W } from "./layout";
+import { ShopView } from "./ShopView";
+import { addButton, makeText, type Rect } from "./ui";
 
 const CELL = 56;
 const BOARD_X = (VIEW_W - COLS * CELL) / 2;
@@ -17,13 +17,6 @@ const CHAIN_COLORS: Record<string, number> = {
   sushi: 0x6fbf73,
   croissant: 0xe07a5f,
 };
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
 
 interface Drag {
   from: number;
@@ -39,6 +32,7 @@ export class GameView {
   private readonly root = new Container();
   private readonly layer = new Container();
   private readonly hud: Text;
+  private readonly shop: ShopView;
   private drag: Drag | null = null;
 
   constructor(
@@ -47,9 +41,11 @@ export class GameView {
     private readonly onChange: () => void,
   ) {
     this.root.addChild(this.layer);
-    this.hud = new Text({ text: "", style: { fill: 0xffffff, fontSize: 15 } });
-    this.hud.position.set(12, 10);
+    this.hud = makeText("", 12, 14, 13);
     this.root.addChild(this.hud);
+    addButton(this.root, { x: VIEW_W - 84, y: 6, w: 72, h: 28 }, "🛒 商店", true, () => this.shop.open());
+    this.shop = new ShopView(game, onChange);
+    this.root.addChild(this.shop.container);
     app.stage.addChild(this.root);
 
     app.stage.eventMode = "static";
@@ -71,6 +67,8 @@ export class GameView {
   }
 
   private updateHud() {
+    this.game.tick();
+    this.shop.update();
     const now = Date.now();
     const e = this.game.energy;
     const next = e.msToNext(now);
@@ -88,17 +86,6 @@ export class GameView {
     return c >= 0 && c < COLS && r >= 0 && r < ROWS ? r * COLS + c : null;
   }
 
-  private text(str: string, x: number, y: number, size: number, fill = 0xffffff, wrap = 0): Text {
-    const t = new Text({
-      text: str,
-      style: { fill, fontSize: size, wordWrap: wrap > 0, wordWrapWidth: wrap, breakWords: true },
-    });
-    t.position.set(x, y);
-    // The stage is "static", so descendants inherit hit-testing; without this a label would swallow clicks meant for the button/item beneath it.
-    t.eventMode = "none";
-    return t;
-  }
-
   render() {
     this.layer.removeChildren().forEach((c) => c.destroy({ children: true }));
     this.drawOrders();
@@ -114,24 +101,17 @@ export class GameView {
       const col = i % perRow;
       const row = Math.floor(i / perRow);
       const label = `${stageLabels[info.stageIndex]} ${info.name}\n${Math.min(have, r.count)}/${r.count}`;
-      this.layer.addChild(this.text(label, x + col * colW, y + row * lineH, 12, have >= r.count ? 0x8fe388 : 0xffffff, colW - 4));
+      this.layer.addChild(makeText(label, x + col * colW, y + row * lineH, 12, have >= r.count ? 0x8fe388 : 0xffffff, colW - 4));
     });
   }
 
-  private drawButton(rect: Rect, label: string, enabled: boolean, onTap: () => void) {
-    const b = new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 8).fill(enabled ? 0x3f9d4f : 0x555049);
-    const t = this.text(label, 0, 0, 13, enabled ? 0xffffff : 0x8a847b);
-    t.position.set(rect.x + (rect.w - t.width) / 2, rect.y + (rect.h - t.height) / 2);
-    if (enabled) {
-      b.eventMode = "static";
-      b.cursor = "pointer";
-      b.on("pointertap", () => {
-        onTap();
-        this.render();
-        this.onChange();
-      });
-    }
-    this.layer.addChild(b, t);
+  /** Button whose action mutates the game; the board is redrawn and the save hook fires afterwards. */
+  private button(rect: Rect, label: string, enabled: boolean, action: () => void) {
+    addButton(this.layer, rect, label, enabled, () => {
+      action();
+      this.render();
+      this.onChange();
+    });
   }
 
   private drawOrders() {
@@ -141,19 +121,19 @@ export class GameView {
     const storyRect: Rect = { x: 12, y: 40, w: VIEW_W - 24, h: 86 };
     this.layer.addChild(new Graphics().roundRect(storyRect.x, storyRect.y, storyRect.w, storyRect.h, 10).fill(0x3d3028));
     if (stage) {
-      this.layer.addChild(this.text(`劇情 ${g.stageIndex + 1}/${story.stages.length}　${stage.title}　獎勵 🪙${stage.reward}`, 22, 46, 13, 0xffd27a));
+      this.layer.addChild(makeText(`劇情 ${g.stageIndex + 1}/${story.stages.length}　${stage.title}　獎勵 🪙${stage.reward} ⚡${stage.rewardEnergy}`, 22, 46, 13, 0xffd27a));
       this.drawRequirements(stage.requirements, 22, 70, 82, 3, 34);
-      this.drawButton({ x: 276, y: 74, w: 62, h: 34 }, "交付", g.canDeliverStory(), () => g.deliverStory());
+      this.button({ x: 276, y: 74, w: 62, h: 34 }, "交付", g.canDeliverStory(), () => g.deliverStory());
     } else {
-      this.layer.addChild(this.text("🎉 劇情全部完成！", 22, 70, 16, 0xffd27a));
+      this.layer.addChild(makeText("🎉 劇情全部完成！", 22, 70, 16, 0xffd27a));
     }
 
     g.randomOrders.forEach((o, i) => {
       const rect: Rect = { x: 12 + i * 118, y: 134, w: 112, h: 120 };
       this.layer.addChild(new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 10).fill(0x2c3a4a));
-      this.layer.addChild(this.text("隨機訂單", rect.x + 8, rect.y + 5, 11, 0x9fc3e8));
+      this.layer.addChild(makeText("隨機訂單", rect.x + 8, rect.y + 5, 11, 0x9fc3e8));
       this.drawRequirements(o.requirements, rect.x + 8, rect.y + 22, 100, 1, 32);
-      this.drawButton({ x: rect.x + 8, y: rect.y + 90, w: rect.w - 16, h: 24 }, `交付 🪙${o.reward}`, g.canDeliverRandom(o.id), () => g.deliverRandom(o.id));
+      this.button({ x: rect.x + 8, y: rect.y + 90, w: rect.w - 16, h: 24 }, `交付 🪙${o.reward}`, g.canDeliverRandom(o.id), () => g.deliverRandom(o.id));
     });
   }
 
@@ -187,10 +167,10 @@ export class GameView {
     }
     c.addChild(g);
     const letter = info.kind === "generator" ? "產" : stageLabels[info.stageIndex];
-    const lt = this.text(letter, 8, 6, 13, info.kind === "generator" ? color : 0x1f1a17);
+    const lt = makeText(letter, 8, 6, 13, info.kind === "generator" ? color : 0x1f1a17);
     lt.style.fontWeight = "bold";
     c.addChild(lt);
-    const name = this.text(info.name, 6, 24, 10, info.kind === "generator" ? 0xffffff : 0x1f1a17, CELL - 12);
+    const name = makeText(info.name, 6, 24, 10, info.kind === "generator" ? 0xffffff : 0x1f1a17, CELL - 12);
     c.addChild(name);
     return c;
   }
