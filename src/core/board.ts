@@ -1,7 +1,8 @@
 import { mergeResult } from "./registry";
 
+/** Normal grid only; the row above it holds the prep station and spice rack (see Game). */
 export const COLS = 6;
-export const ROWS = 8;
+export const ROWS = 7;
 
 export type Cell = string | null;
 

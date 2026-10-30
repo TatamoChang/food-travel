@@ -40,5 +40,27 @@
         { "id": "croissant_e", "name": "可頌早餐盤" }
       ]
     }
+  ],
+  "seasonings": [
+    {
+      "id": "salt",
+      "name": "鹽",
+      "generator": { "id": "gen_salt", "name": "鹽罐", "energyCost": 1 },
+      "stages": [
+        { "id": "salt_1", "name": "粗鹽" },
+        { "id": "salt_2", "name": "細鹽" },
+        { "id": "salt_3", "name": "頂級海鹽" }
+      ]
+    },
+    {
+      "id": "spice",
+      "name": "香料",
+      "generator": { "id": "gen_spice", "name": "香料罐", "energyCost": 1 },
+      "stages": [
+        { "id": "spice_1", "name": "乾香草" },
+        { "id": "spice_2", "name": "綜合香料" },
+        { "id": "spice_3", "name": "秘製香料" }
+      ]
+    }
   ]
 }

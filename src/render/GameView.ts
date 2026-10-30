@@ -1,22 +1,30 @@
 import { Application, Container, Graphics, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
-import type { Game } from "../core/game";
+import { Game, STATIONS, STATION_SLOTS, type StationId } from "../core/game";
 import { story, type Requirement } from "../core/orders";
-import { getItem, stageLabels } from "../core/registry";
+import { getItem, itemLabel } from "../core/registry";
+import { STATION_NAMES } from "../core/shop";
 import { VIEW_H, VIEW_W } from "./layout";
 import { ShopView } from "./ShopView";
+import { WarehouseView } from "./WarehouseView";
 import { addButton, makeText, type Rect } from "./ui";
 
 const CELL = 56;
 const BOARD_X = (VIEW_W - COLS * CELL) / 2;
+/** Top of the station row; the normal grid starts one cell below. */
 const BOARD_Y = 266;
+const GRID_Y = BOARD_Y + CELL;
 const DRAG_THRESHOLD = 6;
 
 const CHAIN_COLORS: Record<string, number> = {
   pizza: 0xe8b04a,
   sushi: 0x6fbf73,
   croissant: 0xe07a5f,
+  salt: 0xc9d3dd,
+  spice: 0x9a6b3f,
 };
+
+const STATION_COLORS: Record<StationId, number> = { prep: 0x6b5235, spice: 0x4f6138 };
 
 interface Drag {
   from: number;
@@ -33,6 +41,7 @@ export class GameView {
   private readonly layer = new Container();
   private readonly hud: Text;
   private readonly shop: ShopView;
+  private readonly warehouse: WarehouseView;
   private drag: Drag | null = null;
 
   constructor(
@@ -43,9 +52,14 @@ export class GameView {
     this.root.addChild(this.layer);
     this.hud = makeText("", 12, 14, 13);
     this.root.addChild(this.hud);
-    addButton(this.root, { x: VIEW_W - 84, y: 6, w: 72, h: 28 }, "🛒 商店", true, () => this.shop.open());
-    this.shop = new ShopView(game, onChange);
-    this.root.addChild(this.shop.container);
+    // Panel actions can change the stations and board, so redraw before saving.
+    const changed = () => {
+      this.render();
+      onChange();
+    };
+    this.shop = new ShopView(game, changed);
+    this.warehouse = new WarehouseView(game, changed);
+    this.root.addChild(this.shop.container, this.warehouse.container);
     app.stage.addChild(this.root);
 
     app.stage.eventMode = "static";
@@ -72,23 +86,30 @@ export class GameView {
     const now = Date.now();
     const e = this.game.energy;
     const next = e.msToNext(now);
-    const timer = next > 0 ? ` (+1 ${Math.ceil(next / 1000)}s)` : "";
-    this.hud.text = `⚡ ${e.value}/${e.max}${timer}    🪙 ${this.game.coins}`;
+    const timer = next > 0 ? ` +1 ${Math.ceil(next / 1000)}s` : "";
+    this.hud.text = `⚡ ${e.value}/${e.max}${timer}  🪙 ${this.game.coins}`;
   }
 
   private cellRect(i: number): Rect {
-    return { x: BOARD_X + Board.col(i) * CELL, y: BOARD_Y + Board.row(i) * CELL, w: CELL, h: CELL };
+    return { x: BOARD_X + Board.col(i) * CELL, y: GRID_Y + Board.row(i) * CELL, w: CELL, h: CELL };
   }
 
+  private slotRect(station: StationId, slot: number): Rect {
+    return { x: BOARD_X + Game.spawnOrigin(station, slot) * CELL, y: BOARD_Y, w: CELL, h: CELL };
+  }
+
+  /** Normal grid cell under a point; the station row is not a drop target. */
   private cellAt(x: number, y: number): number | null {
     const c = Math.floor((x - BOARD_X) / CELL);
-    const r = Math.floor((y - BOARD_Y) / CELL);
+    const r = Math.floor((y - GRID_Y) / CELL);
     return c >= 0 && c < COLS && r >= 0 && r < ROWS ? r * COLS + c : null;
   }
 
   render() {
     this.layer.removeChildren().forEach((c) => c.destroy({ children: true }));
+    this.drawHudButtons();
     this.drawOrders();
+    this.drawStations();
     this.drawBoard();
     this.updateHud();
   }
@@ -100,7 +121,7 @@ export class GameView {
       const have = this.game.board.count(r.itemId);
       const col = i % perRow;
       const row = Math.floor(i / perRow);
-      const label = `${stageLabels[info.stageIndex]} ${info.name}\n${Math.min(have, r.count)}/${r.count}`;
+      const label = `${itemLabel(r.itemId)} ${info.name}\n${Math.min(have, r.count)}/${r.count}`;
       this.layer.addChild(makeText(label, x + col * colW, y + row * lineH, 12, have >= r.count ? 0x8fe388 : 0xffffff, colW - 4));
     });
   }
@@ -112,6 +133,13 @@ export class GameView {
       this.render();
       this.onChange();
     });
+  }
+
+  /** Lives in the rebuilt layer so the warehouse count stays current. */
+  private drawHudButtons() {
+    const n = this.game.warehouse.length;
+    addButton(this.layer, { x: VIEW_W - 162, y: 6, w: 72, h: 28 }, n > 0 ? `📦 倉庫 ${n}` : "📦 倉庫", true, () => this.warehouse.open());
+    addButton(this.layer, { x: VIEW_W - 84, y: 6, w: 72, h: 28 }, "🛒 商店", true, () => this.shop.open());
   }
 
   private drawOrders() {
@@ -135,6 +163,48 @@ export class GameView {
       this.drawRequirements(o.requirements, rect.x + 8, rect.y + 22, 100, 1, 32);
       this.button({ x: rect.x + 8, y: rect.y + 90, w: rect.w - 16, h: 24 }, `交付 🪙${o.reward}`, g.canDeliverRandom(o.id), () => g.deliverRandom(o.id));
     });
+  }
+
+  /** Top row: prep station (left 3) and spice rack (right 3). Tap a generator to produce; locked slots open the shop. */
+  private drawStations() {
+    const g = this.game;
+    for (const station of STATIONS) {
+      const first = this.slotRect(station, 0);
+      const color = STATION_COLORS[station];
+      this.layer.addChild(new Graphics().roundRect(first.x, first.y, CELL * STATION_SLOTS, CELL, 8).fill(0x2a2420).stroke({ width: 2, color }));
+      for (let slot = 0; slot < STATION_SLOTS; slot++) {
+        const r = this.slotRect(station, slot);
+        const id = g.stations[station][slot];
+        if (slot >= g.slotsOpen[station]) {
+          this.slotHint(r, `🔒\n${STATION_NAMES[station]}`, () => this.shop.open());
+        } else if (!id) {
+          this.slotHint(r, `${STATION_NAMES[station]}\n空`, () => this.warehouse.open());
+        } else {
+          const node = this.makeItem(id);
+          node.position.set(r.x, r.y);
+          node.eventMode = "static";
+          node.cursor = "pointer";
+          node.on("pointertap", () => {
+            if (this.drag) return;
+            g.tapStation(station, slot);
+            this.render();
+            this.onChange();
+          });
+          this.layer.addChild(node);
+        }
+      }
+    }
+  }
+
+  private slotHint(r: Rect, label: string, onTap: () => void) {
+    const hit = new Graphics().roundRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8, 8).fill({ color: 0x000000, alpha: 0.25 });
+    hit.eventMode = "static";
+    hit.cursor = "pointer";
+    hit.on("pointertap", onTap);
+    const t = makeText(label, 0, 0, 10, 0x8a847b);
+    t.style.align = "center";
+    t.position.set(r.x + (r.w - t.width) / 2, r.y + (r.h - t.height) / 2);
+    this.layer.addChild(hit, t);
   }
 
   private drawBoard() {
@@ -161,13 +231,15 @@ export class GameView {
     const g = new Graphics().roundRect(4, 4, CELL - 8, CELL - 8, 8);
     if (info.kind === "generator") {
       g.fill(0x1f1a17).stroke({ width: 3, color });
+    } else if (info.kind === "special") {
+      g.fill(color).stroke({ width: 3, color: 0xffd27a });
     } else {
       g.fill(color);
-      g.alpha = 0.55 + info.stageIndex * 0.1125;
+      const steps = info.category === "seasoning" ? 2 : 4;
+      g.alpha = 0.55 + (info.stageIndex / steps) * 0.45;
     }
     c.addChild(g);
-    const letter = info.kind === "generator" ? "產" : stageLabels[info.stageIndex];
-    const lt = makeText(letter, 8, 6, 13, info.kind === "generator" ? color : 0x1f1a17);
+    const lt = makeText(itemLabel(id), 8, 6, 13, info.kind === "generator" ? color : 0x1f1a17);
     lt.style.fontWeight = "bold";
     c.addChild(lt);
     const name = makeText(info.name, 6, 24, 10, info.kind === "generator" ? 0xffffff : 0x1f1a17, CELL - 12);
@@ -203,9 +275,7 @@ export class GameView {
     const p = this.local(e);
     const g = this.game;
 
-    if (!d.moved) {
-      g.tap(d.from);
-    } else {
+    if (d.moved) {
       const to = this.cellAt(p.x, p.y);
       if (to !== null) g.move(d.from, to);
     }

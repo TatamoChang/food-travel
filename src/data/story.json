@@ -21,7 +21,7 @@
       ],
       "reward": 60,
       "rewardEnergy": 10,
-      "unlocks": ["croissant"]
+      "unlocks": ["croissant", "salt"]
     },
     {
       "id": "s3",
@@ -33,7 +33,7 @@
       ],
       "reward": 100,
       "rewardEnergy": 10,
-      "unlocks": []
+      "unlocks": ["spice"]
     },
     {
       "id": "s4",

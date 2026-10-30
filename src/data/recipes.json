@@ -1,0 +1,10 @@
+{
+  "recipes": [
+    { "seasoning": "spice_2", "dish": "pizza_c", "result": { "id": "special_pizza_spiced", "name": "香料披薩" } },
+    { "seasoning": "spice_3", "dish": "pizza_d", "result": { "id": "special_pizza_secret", "name": "秘製起司披薩" } },
+    { "seasoning": "salt_2", "dish": "sushi_c", "result": { "id": "special_sushi_salted", "name": "鹽燒握壽司" } },
+    { "seasoning": "salt_3", "dish": "sushi_d", "result": { "id": "special_sushi_platter", "name": "海鹽壽司拼盤" } },
+    { "seasoning": "salt_2", "dish": "croissant_c", "result": { "id": "special_croissant_salted", "name": "海鹽可頌" } },
+    { "seasoning": "spice_3", "dish": "croissant_d", "result": { "id": "special_croissant_herb", "name": "香草奶油可頌" } }
+  ]
+}

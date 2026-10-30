@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { Board, COLS } from "../src/core/board";
+import { Board, COLS, ROWS } from "../src/core/board";
 import { Energy } from "../src/core/energy";
-import { Game, newState } from "../src/core/game";
-import { generateRandomOrder, story, tierCap } from "../src/core/orders";
-import { chains, getItem } from "../src/core/registry";
+import { Game, newState, type SavedState } from "../src/core/game";
+import { SPECIAL_ORDER_FROM_STAGE, generateRandomOrder, story, tierCap } from "../src/core/orders";
+import { getAnyChain, getItem, recipeFor, recipes } from "../src/core/registry";
 import { mulberry32 } from "../src/core/rng";
 import { getProduct, products } from "../src/core/shop";
 
@@ -24,7 +24,7 @@ describe("story data", () => {
         expect(unlocked.has(info!.chainId), `${stage.id} needs ${r.itemId}`).toBe(true);
       }
       for (const u of stage.unlocks) {
-        expect(chains.some((c) => c.id === u)).toBe(true);
+        expect(getAnyChain(u), u).toBeDefined();
         unlocked.add(u);
       }
     }
@@ -47,10 +47,10 @@ describe("Board", () => {
 
   it("spawns into the nearest empty cell and reports a full board", () => {
     const b = new Board();
-    b.cells[0] = "gen_pizza";
+    b.cells[0] = "pizza_b";
     expect(b.spawnNear("pizza_a", 0)).toBe(1);
     expect(b.spawnNear("pizza_a", 0)).toBe(COLS); // cell below is as close as cell 1 was
-    const full = new Board(new Array(48).fill("pizza_a"));
+    const full = new Board(new Array(COLS * ROWS).fill("pizza_a"));
     expect(full.spawnNear("pizza_a", 0)).toBeNull();
     expect(Board.col(COLS)).toBe(0);
   });
@@ -94,7 +94,8 @@ describe("Shop", () => {
     expect(new Set(products.map((p) => p.id)).size).toBe(products.length);
     for (const p of products) {
       expect(p.cost).toBeGreaterThan(0);
-      expect(p.effect.amount).toBeGreaterThan(0);
+      if ("amount" in p.effect) expect(p.effect.amount).toBeGreaterThan(0);
+      if (p.requires) expect(getProduct(p.requires), p.id).toBeDefined();
     }
   });
 
@@ -103,7 +104,7 @@ describe("Shop", () => {
     const g = rich(p.cost + 7);
     expect(g.buy(p.id)).toEqual({ ok: true });
     expect(g.coins).toBe(7);
-    expect(g.energy.value).toBe(3 + p.effect.amount);
+    expect(g.energy.value).toBe(3 + (p.effect.type === "energy" ? p.effect.amount : NaN));
   });
 
   it("rejects purchases without enough coins or with unknown ids", () => {
@@ -237,19 +238,30 @@ describe("Random orders", () => {
 describe("Game", () => {
   const fixed = () => 0;
 
-  it("taps a generator: spends energy, spawns A, handles empty energy", () => {
+  it("taps a station generator: spends energy, spawns A on the board, handles empty energy", () => {
     const state = newState(0);
     state.energy.value = 1;
     const g = new Game(state, () => 0, mulberry32(1));
-    expect(g.tap(0)).toEqual({ ok: true, spawnedAt: 1 });
-    expect(g.board.cells[1]).toBe("pizza_a");
-    expect(g.tap(0)).toEqual({ ok: false, reason: "no-energy" });
-    expect(g.tap(1)).toEqual({ ok: false, reason: "not-generator" });
+    expect(g.stations.prep[0]).toBe("gen_pizza");
+    expect(g.tapStation("prep", 0)).toEqual({ ok: true, spawnedAt: 0 });
+    expect(g.board.cells[0]).toBe("pizza_a");
+    expect(g.tapStation("prep", 0)).toEqual({ ok: false, reason: "no-energy" });
+    expect(g.tapStation("prep", 1)).toEqual({ ok: false, reason: "not-generator" });
+    expect(g.tapStation("spice", 0)).toEqual({ ok: false, reason: "not-generator" });
+  });
+
+  it("reports a full board before spending energy", () => {
+    const state = newState(0);
+    state.board = new Array(COLS * ROWS).fill("pizza_e");
+    const g = new Game(state, () => 0, mulberry32(1));
+    expect(g.tapStation("prep", 0)).toEqual({ ok: false, reason: "board-full" });
+    expect(g.energy.value).toBe(20);
   });
 
   it("story delivery is all-or-nothing, then unlocks the next dish", () => {
     const state = newState(0);
     state.board[1] = "pizza_b";
+    state.slotsOpen.prep = 2;
     const g = new Game(state, fixed, mulberry32(1));
 
     expect(g.canDeliverStory()).toBe(false);
@@ -266,7 +278,7 @@ describe("Game", () => {
     expect(g.coins).toBe(story.stages[0].reward);
     expect(g.energy.value).toBe(20 + story.stages[0].rewardEnergy);
     expect(g.unlocked).toContain("sushi");
-    expect(g.board.cells).toContain("gen_sushi");
+    expect(g.stations.prep).toEqual(["gen_pizza", "gen_sushi", null]);
   });
 
   it("delivering one order can make an overlapping order undeliverable", () => {
@@ -324,5 +336,210 @@ describe("Game", () => {
     }
     expect(g.storyCompleted).toBe(true);
     expect(g.currentStage).toBeNull();
+  });
+});
+
+describe("Stations and warehouse", () => {
+  const game = (edit?: (s: ReturnType<typeof newState>) => void) => {
+    const s = newState(0);
+    edit?.(s);
+    return new Game(s, () => 0, mulberry32(1));
+  };
+
+  it("unlocked generators go to their station, or the warehouse when it is full", () => {
+    const g = game();
+    g.board.cells[0] = "pizza_b";
+    g.board.cells[1] = "pizza_c";
+    g.deliverStory(); // unlocks sushi, but the prep station has 1 open slot
+    expect(g.stations.prep).toEqual(["gen_pizza", null, null]);
+    expect(g.warehouse).toEqual(["gen_sushi"]);
+    g.board.cells[0] = "pizza_d";
+    g.board.cells[1] = "sushi_c";
+    g.deliverStory(); // unlocks croissant and salt
+    expect(g.warehouse).toEqual(["gen_sushi", "gen_croissant"]);
+    expect(g.stations.spice).toEqual(["gen_salt", null, null]);
+  });
+
+  it("stores and places generators to swap what is on a station", () => {
+    const g = game((s) => (s.warehouse = ["gen_sushi"]));
+    expect(g.canPlace(0)).toBe(false); // only slot is taken
+    expect(g.storeFromStation("prep", 0)).toBe(true);
+    expect(g.stations.prep[0]).toBeNull();
+    expect(g.warehouse).toEqual(["gen_sushi", "gen_pizza"]);
+    expect(g.storeFromStation("prep", 0)).toBe(false);
+    expect(g.placeFromWarehouse(0)).toBe(true);
+    expect(g.stations.prep[0]).toBe("gen_sushi");
+    expect(g.warehouse).toEqual(["gen_pizza"]);
+    expect(g.tapStation("prep", 0)).toEqual({ ok: true, spawnedAt: 0 });
+    expect(g.board.cells[0]).toBe("sushi_a");
+  });
+
+  it("puts generators on their own station and items on the board", () => {
+    const g = game((s) => (s.warehouse = ["gen_spice", "sushi_b"]));
+    expect(g.placeFromWarehouse(0)).toBe(true);
+    expect(g.stations.spice[0]).toBe("gen_spice");
+    expect(g.placeFromWarehouse(0)).toBe(true);
+    expect(g.board.cells[0]).toBe("sushi_b");
+    expect(g.warehouse).toEqual([]);
+    expect(g.placeFromWarehouse(0)).toBe(false);
+  });
+
+  it("does not place items when the board is full", () => {
+    const g = game((s) => {
+      s.board = new Array(COLS * ROWS).fill("pizza_e");
+      s.warehouse = ["sushi_b"];
+    });
+    expect(g.canPlace(0)).toBe(false);
+    expect(g.placeFromWarehouse(0)).toBe(false);
+  });
+
+  it("spice rack generators spawn near their column", () => {
+    const g = game((s) => (s.stations.spice[0] = "gen_salt"));
+    expect(g.tapStation("spice", 0)).toEqual({ ok: true, spawnedAt: 3 });
+    expect(g.board.cells[3]).toBe("salt_1");
+  });
+
+  it("round-trips stations, slots and warehouse through a save", () => {
+    const g = game((s) => {
+      s.warehouse = ["gen_sushi"];
+      s.slotsOpen.spice = 2;
+    });
+    const g2 = new Game(JSON.parse(JSON.stringify(g.snapshot())), () => 0, mulberry32(1));
+    expect(g2.snapshot()).toEqual(g.snapshot());
+  });
+});
+
+describe("Slot expansion products", () => {
+  const rich = () => {
+    const s = newState(0);
+    s.coins = 5000;
+    return new Game(s, () => 0, mulberry32(1));
+  };
+
+  it("third slot needs the second one first", () => {
+    const g = rich();
+    expect(g.missingRequirement("prep_slot_3")).toBe("prep_slot_2");
+    expect(g.buy("prep_slot_3")).toEqual({ ok: false, reason: "requires-other" });
+    expect(g.coins).toBe(5000);
+    expect(g.buy("prep_slot_2")).toEqual({ ok: true });
+    expect(g.slotsOpen.prep).toBe(2);
+    expect(g.missingRequirement("prep_slot_3")).toBeNull();
+    expect(g.buy("prep_slot_3")).toEqual({ ok: true });
+    expect(g.slotsOpen.prep).toBe(3);
+    expect(g.buy("prep_slot_3")).toEqual({ ok: false, reason: "already-purchased" });
+    expect(g.coins).toBe(5000 - 200 - 600);
+  });
+
+  it("each station expands separately", () => {
+    const g = rich();
+    g.buy("spice_slot_2");
+    g.buy("spice_slot_3");
+    expect(g.slotsOpen).toEqual({ prep: 1, spice: 3 });
+  });
+
+  it("an opened slot can take a warehouse generator", () => {
+    const g = rich();
+    g.warehouse.push("gen_sushi");
+    expect(g.canPlace(0)).toBe(false);
+    g.buy("prep_slot_2");
+    expect(g.placeFromWarehouse(0)).toBe(true);
+    expect(g.stations.prep).toEqual(["gen_pizza", "gen_sushi", null]);
+  });
+});
+
+describe("v1 save migration", () => {
+  /** v1 save: 6x8 board with generators on it, pendingGenerators, no station fields. */
+  const legacy = (cells: Record<number, string>, extra: Partial<SavedState> = {}): SavedState => {
+    const board = new Array(COLS * (ROWS + 1)).fill(null);
+    for (const [i, id] of Object.entries(cells)) board[Number(i)] = id;
+    return {
+      board,
+      energy: { value: 20, updatedAt: 0 },
+      coins: 10,
+      stageIndex: 1,
+      unlocked: ["pizza", "sushi"],
+      randomOrders: [],
+      nextOrderId: 1,
+      pendingGenerators: [],
+      ...extra,
+    };
+  };
+
+  it("moves generators to the stations and the top row's items onto the board", () => {
+    const g = new Game(legacy({ 0: "gen_pizza", 1: "pizza_b", 5: "sushi_a", 7: "pizza_c", 20: "gen_sushi" }), () => 0, mulberry32(1));
+    expect(g.board.cells).toHaveLength(COLS * ROWS);
+    expect(g.stations.prep).toEqual(["gen_pizza", null, null]);
+    expect(g.warehouse).toEqual(["gen_sushi"]);
+    expect(g.board.cells).not.toContain("gen_pizza");
+    expect(g.board.cells).not.toContain("gen_sushi");
+    // old cell 7 (row 1, col 1) is now cell 1
+    expect(g.board.cells[1]).toBe("pizza_c");
+    expect(g.board.count("pizza_b")).toBe(1);
+    expect(g.board.count("sushi_a")).toBe(1);
+    expect(g.slotsOpen).toEqual({ prep: 1, spice: 1 });
+  });
+
+  it("parks top-row items in the warehouse when the board is full", () => {
+    const cells: Record<number, string> = { 0: "gen_pizza", 1: "pizza_b", 2: "sushi_d" };
+    for (let i = COLS; i < COLS * (ROWS + 1); i++) cells[i] = "pizza_e";
+    const g = new Game(legacy(cells), () => 0, mulberry32(1));
+    expect(g.board.cells.every((c) => c === "pizza_e")).toBe(true);
+    expect(g.warehouse).toEqual(["pizza_b", "sushi_d"]);
+  });
+
+  it("generators leaving the board free cells for the top row's items", () => {
+    const cells: Record<number, string> = { 0: "pizza_b", 40: "gen_pizza" };
+    for (let i = COLS; i < COLS * (ROWS + 1); i++) if (i !== 40) cells[i] = "pizza_e";
+    const g = new Game(legacy(cells), () => 0, mulberry32(1));
+    expect(g.stations.prep[0]).toBe("gen_pizza");
+    expect(g.board.cells[40 - COLS]).toBe("pizza_b");
+    expect(g.warehouse).toEqual([]);
+  });
+
+  it("pending generators and seasonings of finished stages are granted", () => {
+    const g = new Game(
+      legacy({ 0: "gen_pizza" }, { stageIndex: 3, unlocked: ["pizza", "sushi", "croissant"], pendingGenerators: ["gen_croissant"] }),
+      () => 0,
+      mulberry32(1),
+    );
+    expect(g.unlocked).toEqual(expect.arrayContaining(["salt", "spice"]));
+    expect(g.stations.spice).toEqual(["gen_salt", null, null]);
+    expect(g.warehouse).toEqual(["gen_croissant", "gen_spice"]);
+  });
+});
+
+describe("Special dishes in random orders", () => {
+  it("only appear from the configured stage, and only with their seasoning unlocked", () => {
+    const rng = mulberry32(5);
+    const all = ["pizza", "sushi", "croissant", "salt", "spice"];
+    const specialsIn = (unlocked: string[], stage: number) => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 500; i++) {
+        for (const r of generateRandomOrder(i, rng, unlocked, stage).requirements) {
+          if (getItem(r.itemId)!.kind === "special") seen.add(r.itemId);
+        }
+      }
+      return seen;
+    };
+    expect(specialsIn(all, SPECIAL_ORDER_FROM_STAGE - 1).size).toBe(0);
+    expect(specialsIn(all, 4).size).toBe(recipes.length);
+    const saltOnly = specialsIn(["pizza", "sushi", "croissant", "salt"], SPECIAL_ORDER_FROM_STAGE);
+    expect(saltOnly.size).toBeGreaterThan(0);
+    for (const id of saltOnly) expect(recipeFor(id)!.seasoning.startsWith("salt")).toBe(true);
+    // stage 3 (index 2) caps at D, so no special made from an E dish could show up anyway
+    for (const id of specialsIn(all, SPECIAL_ORDER_FROM_STAGE)) expect(getItem(id)!.stageIndex).toBeLessThanOrEqual(tierCap(SPECIAL_ORDER_FROM_STAGE));
+  });
+
+  it("pay about 1.5x a plain dish of the same stage", () => {
+    const rng = mulberry32(9);
+    for (let i = 0; i < 300; i++) {
+      const o = generateRandomOrder(i, rng, ["pizza", "sushi", "croissant", "salt", "spice"], 4);
+      const expected = o.requirements.reduce((n, r) => {
+        const info = getItem(r.itemId)!;
+        const base = 3 * 2 ** info.stageIndex;
+        return n + (info.kind === "special" ? Math.round(base * 1.5) : base) * r.count;
+      }, 0);
+      expect(o.reward).toBe(expected);
+    }
   });
 });
