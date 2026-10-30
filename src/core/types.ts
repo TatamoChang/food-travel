@@ -27,7 +27,11 @@ export interface ChainsFile {
   seasonings: ChainDef[];
 }
 
+/** daily: usable once its chains are unlocked. green/orange/red: special recipes that must be unlocked first. */
+export type RecipeTier = "daily" | "green" | "orange" | "red";
+
 export interface RecipeDef {
+  tier: RecipeTier;
   /** Seasoning item id. */
   seasoning: string;
   /** Dish stage item id. */

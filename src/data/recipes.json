@@ -1,10 +1,18 @@
 {
   "recipes": [
-    { "seasoning": "spice_2", "dish": "pizza_c", "result": { "id": "special_pizza_spiced", "name": "香料披薩" } },
-    { "seasoning": "spice_3", "dish": "pizza_d", "result": { "id": "special_pizza_secret", "name": "秘製起司披薩" } },
-    { "seasoning": "salt_2", "dish": "sushi_c", "result": { "id": "special_sushi_salted", "name": "鹽燒握壽司" } },
-    { "seasoning": "salt_3", "dish": "sushi_d", "result": { "id": "special_sushi_platter", "name": "海鹽壽司拼盤" } },
-    { "seasoning": "salt_2", "dish": "croissant_c", "result": { "id": "special_croissant_salted", "name": "海鹽可頌" } },
-    { "seasoning": "spice_3", "dish": "croissant_d", "result": { "id": "special_croissant_herb", "name": "香草奶油可頌" } }
+    { "tier": "daily", "seasoning": "spice_2", "dish": "pizza_c", "result": { "id": "special_pizza_spiced", "name": "香料披薩" } },
+    { "tier": "daily", "seasoning": "spice_3", "dish": "pizza_d", "result": { "id": "special_pizza_secret", "name": "秘製起司披薩" } },
+    { "tier": "daily", "seasoning": "salt_2", "dish": "sushi_c", "result": { "id": "special_sushi_salted", "name": "鹽燒握壽司" } },
+    { "tier": "daily", "seasoning": "salt_3", "dish": "sushi_d", "result": { "id": "special_sushi_platter", "name": "海鹽壽司拼盤" } },
+    { "tier": "daily", "seasoning": "salt_2", "dish": "croissant_c", "result": { "id": "special_croissant_salted", "name": "海鹽可頌" } },
+    { "tier": "daily", "seasoning": "spice_3", "dish": "croissant_d", "result": { "id": "special_croissant_herb", "name": "香草奶油可頌" } },
+    { "tier": "green", "seasoning": "salt_1", "dish": "sushi_b", "result": { "id": "special_onigiri_salted", "name": "鹽烤飯糰" } },
+    { "tier": "green", "seasoning": "spice_1", "dish": "pizza_b", "result": { "id": "special_breadstick_herb", "name": "香草麵包棒" } },
+    { "tier": "green", "seasoning": "salt_1", "dish": "croissant_b", "result": { "id": "special_pastry_salted", "name": "鹽奶油酥皮" } },
+    { "tier": "green", "seasoning": "spice_1", "dish": "sushi_b", "result": { "id": "special_onigiri_spiced", "name": "香料飯糰" } },
+    { "tier": "green", "seasoning": "spice_2", "dish": "sushi_c", "result": { "id": "special_sushi_seared", "name": "炙燒香料握壽司" } },
+    { "tier": "orange", "seasoning": "spice_3", "dish": "pizza_e", "result": { "id": "special_pizza_truffle", "name": "松露瑪格麗特" } },
+    { "tier": "orange", "seasoning": "salt_3", "dish": "croissant_e", "result": { "id": "special_croissant_tart", "name": "黃金可頌塔" } },
+    { "tier": "red", "seasoning": "spice_3", "dish": "sushi_e", "result": { "id": "special_sushi_emperor", "name": "帝王壽司船" } }
   ]
 }

@@ -1,6 +1,6 @@
 import chainsData from "../data/chains.json";
 import recipesData from "../data/recipes.json";
-import type { ChainDef, ChainsFile, ItemInfo, RecipeDef, RecipesFile, StationId } from "./types";
+import type { ChainDef, ChainsFile, ItemInfo, RecipeDef, RecipesFile, RecipeTier, StationId } from "./types";
 
 const data = chainsData as ChainsFile;
 
@@ -53,6 +53,8 @@ export function getAnyChain(id: string): ChainDef | undefined {
   return getChain(id) ?? seasonings.find((c) => c.id === id);
 }
 
+export type { RecipeTier };
+
 /** Recipe producing the special dish `id`, if it is one. */
 export function recipeFor(id: string): RecipeDef | undefined {
   return recipes.find((r) => r.result.id === id);
@@ -72,14 +74,18 @@ export function stationOf(generatorId: string): StationId {
   return items.get(generatorId)?.category === "seasoning" ? "spice" : "prep";
 }
 
+/** Whether a recipe (by result id) may be used; daily recipes always can. */
+export type RecipeFilter = (resultId: string) => boolean;
+export const dailyOnly: RecipeFilter = (id) => recipeFor(id)?.tier === "daily";
+
 /**
  * Result of dropping one item on another, or null when they cannot merge.
  * Two identical stage items step up their chain (the top stage cannot); a seasoning and a dish
- * matching a recipe make a special dish, in either order. Generators and special dishes never merge.
+ * matching a usable recipe make a special dish, in either order. Generators and special dishes never merge.
  */
-export function mergeResult(a: string, b: string): string | null {
+export function mergeResult(a: string, b: string, canUse: RecipeFilter = dailyOnly): string | null {
   const recipe = recipes.find((r) => (r.seasoning === a && r.dish === b) || (r.seasoning === b && r.dish === a));
-  if (recipe) return recipe.result.id;
+  if (recipe) return canUse(recipe.result.id) ? recipe.result.id : null;
   if (a !== b) return null;
   const info = items.get(a);
   if (!info || info.kind !== "stage") return null;

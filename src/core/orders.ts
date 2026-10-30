@@ -1,5 +1,5 @@
 import storyData from "../data/story.json";
-import { getChain, getItem, recipes, stageLabels } from "./registry";
+import { getChain, getItem, recipeFor, recipes, stageLabels, type RecipeTier } from "./registry";
 import type { Rng } from "./rng";
 
 export interface Requirement {
@@ -13,7 +13,14 @@ export interface StoryStage {
   requirements: Requirement[];
   reward: number;
   rewardEnergy: number;
+  /** Dish or seasoning chain ids unlocked on completion. */
   unlocks: string[];
+  /** Boss stages are drawn in red. */
+  boss?: boolean;
+  /** Recipe shards granted on completion (see tasks.json shardRecipe). */
+  rewardShard?: number;
+  /** Completing the stage opens one more prep station slot. */
+  opensPrepSlot?: boolean;
 }
 
 export interface StoryFile {
@@ -30,26 +37,30 @@ export interface RandomOrder {
 }
 
 export const RANDOM_ORDER_SLOTS = 3;
-/** Story stage index (0-based) from which random orders may ask for special dishes. */
+/** Story stage index (0-based) from which random orders may ask for daily special dishes. */
 export const SPECIAL_ORDER_FROM_STAGE = 2;
 /** Chance that a random order line is a special dish, when one is available. */
 export const SPECIAL_ORDER_CHANCE = 0.3;
-/** Reward multiplier of a special dish over a plain dish of the same stage. */
-export const SPECIAL_REWARD_MULT = 1.5;
+/** Reward multiplier of a special dish over a plain dish of the same stage, by recipe tier. */
+export const TIER_REWARD_MULT: Record<RecipeTier, number> = { daily: 1.5, green: 2, orange: 3, red: 5 };
 
-/** Coins paid per copy of an item at `stageIdx`. */
-function itemReward(stageIdx: number, special: boolean): number {
-  const base = 3 * 2 ** stageIdx;
-  return special ? Math.round(base * SPECIAL_REWARD_MULT) : base;
+/** Coins paid per copy of `itemId`. */
+export function itemReward(itemId: string): number {
+  const base = 3 * 2 ** getItem(itemId)!.stageIndex;
+  const recipe = recipeFor(itemId);
+  return recipe ? Math.round(base * TIER_REWARD_MULT[recipe.tier]) : base;
 }
 
-/** Special dishes whose dish and seasoning chains are both unlocked and whose stage is within the cap. */
-function availableSpecials(unlocked: readonly string[], storyStageIndex: number, cap: number): string[] {
-  if (storyStageIndex < SPECIAL_ORDER_FROM_STAGE) return [];
+/**
+ * Special dishes an order may ask for: both chains unlocked, dish stage within the cap, and the recipe
+ * usable (daily ones from SPECIAL_ORDER_FROM_STAGE, special ones once unlocked).
+ */
+function availableSpecials(unlocked: readonly string[], storyStageIndex: number, cap: number, unlockedRecipes: readonly string[]): string[] {
   return recipes
     .filter((r) => {
       const dish = getItem(r.dish)!;
-      return dish.stageIndex <= cap && unlocked.includes(dish.chainId) && unlocked.includes(getItem(r.seasoning)!.chainId);
+      const usable = r.tier === "daily" ? storyStageIndex >= SPECIAL_ORDER_FROM_STAGE : unlockedRecipes.includes(r.result.id);
+      return usable && dish.stageIndex <= cap && unlocked.includes(dish.chainId) && unlocked.includes(getItem(r.seasoning)!.chainId);
     })
     .map((r) => r.result.id);
 }
@@ -70,6 +81,7 @@ export function generateRandomOrder(
   rng: Rng,
   unlockedChainIds: readonly string[],
   storyStageIndex: number,
+  unlockedRecipes: readonly string[] = [],
 ): RandomOrder {
   const chains = unlockedChainIds.map((c) => getChain(c)).filter((c) => c !== undefined);
   const cap = tierCap(storyStageIndex);
@@ -77,24 +89,20 @@ export function generateRandomOrder(
   const lines = 1 + Math.floor(rng() * 2);
   const requirements: Requirement[] = [];
   let reward = 0;
-  const specials = availableSpecials(unlockedChainIds, storyStageIndex, cap);
+  const specials = availableSpecials(unlockedChainIds, storyStageIndex, cap, unlockedRecipes);
   for (let i = 0; i < lines; i++) {
     let itemId: string;
-    let stageIdx: number;
-    const special = specials.length > 0 && rng() < SPECIAL_ORDER_CHANCE;
-    if (special) {
+    if (specials.length > 0 && rng() < SPECIAL_ORDER_CHANCE) {
       itemId = specials[Math.floor(rng() * specials.length)];
-      stageIdx = getItem(itemId)!.stageIndex;
     } else {
       const chain = chains[Math.floor(rng() * chains.length)];
-      stageIdx = lo + Math.floor(rng() * (cap - lo + 1));
-      itemId = chain.stages[stageIdx].id;
+      itemId = chain.stages[lo + Math.floor(rng() * (cap - lo + 1))].id;
     }
     const count = 1 + Math.floor(rng() * 2);
     const existing = requirements.find((r) => r.itemId === itemId);
     if (existing) existing.count += count;
     else requirements.push({ itemId, count });
-    reward += itemReward(stageIdx, special) * count;
+    reward += itemReward(itemId) * count;
   }
   return { id, requirements, reward };
 }

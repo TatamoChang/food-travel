@@ -82,6 +82,13 @@ const TUNA = ["#d63a3a", "#a82424", "#f07a7a"];
 const TAMAGO = ["#ffd34d", "#e0a82a", "#fff0a8"];
 const sushiD = () => board() + mini(-4, 34, 0.5) + mini(32, 30, 0.5, ...TUNA) + mini(68, 34, 0.5, ...TAMAGO);
 
+function onigiri(rice = RICE, riceSh = RICE_SH) {
+  const tri = "M64 24q8 0 34 50q8 20 -12 24h-44q-20 -4 -12 -24q26 -50 34 -50z";
+  return cel(tri, rice, riceSh) + grains([[56, 44, 10], [70, 50, -20], [50, 60, 40]]) + clipped(tri, flat("M44 74h40v40h-40z", "#2d3b2f", 3.5) + line("M50 80v20", "#4f6150", 2)) + line(tri, O, 5) + hl("M44 64q6 -16 14 -26");
+}
+const crown = (x, y, s = 1) => g(`translate(${x} ${y}) scale(${s})`, flat("M-14 6l-4 -16l10 8l8 -12l8 12l10 -8l-4 16z", "#ffd34d", 3) + dot(0, -14, 2.5, "#e0483a"));
+const flame = (x, y, s = 1) => g(`translate(${x} ${y}) scale(${s})`, flat("M0 12q-12 -4 -8 -16q2 6 6 6q-4 -12 6 -20q-2 10 6 14q6 8 -2 14q-4 2 -8 2z", "#ff9a2e", 2.5) + flat("M1 10q-5 -2 -3 -8q3 3 5 2q2 4 -2 6z", "#ffe14d", 1.5));
+
 // ---------- croissant ----------
 function croissant(base, shade, x = 0, y = 0, s = 1) {
   const seg = (cx, cy, rx, ry, rot) => g(`rotate(${rot} ${cx} ${cy})`, cel(ell(cx, cy, rx, ry), base, shade, { w: 4.5 }));
@@ -147,10 +154,7 @@ const icons = {
     flat("M26 66q38 -46 76 0z", RICE, 4.5) + grains([[46, 54, 20], [62, 46, -10], [78, 54, 30], [56, 60, 70], [70, 60, -40]]) +
     cel("M20 66h88q-4 38 -44 38q-40 0 -44 -38z", "#3d6fb5", "#2a4f88") + line("M34 84q8 -6 16 0q8 6 16 0q8 -6 16 0q8 6 16 0", "#9fc3e8", 3) +
     flat("M50 104h28v8h-28z", "#2a4f88", 4) + hl("M28 76q2 10 8 16"),
-  sushi_b: () => {
-    const tri = "M64 24q8 0 34 50q8 20 -12 24h-44q-20 -4 -12 -24q26 -50 34 -50z";
-    return cel(tri, RICE, RICE_SH) + grains([[56, 44, 10], [70, 50, -20], [50, 60, 40]]) + clipped(tri, flat("M44 74h40v40h-40z", "#2d3b2f", 3.5) + line("M50 80v20", "#4f6150", 2)) + line(tri, O, 5) + hl("M44 64q6 -16 14 -26");
-  },
+  sushi_b: () => onigiri(),
   sushi_c: () => nigiri(),
   sushi_d: sushiD,
   sushi_e: () =>
@@ -203,6 +207,25 @@ const icons = {
   special_sushi_platter: () => sushiD() + crystal(22, 56, 0.9, 20) + crystal(58, 52, 0.9, -10) + crystal(94, 56, 0.9, 30) + crystal(40, 48, 0.8, 0) + sparkle(110, 22),
   special_croissant_salted: () => croissant("#eeb459", "#c07a2a", 0, 6) + crystal(52, 54, 0.9, 20) + crystal(66, 48, 1, -15) + crystal(78, 58, 0.9, 35) + crystal(40, 66, 0.8, 0) + crystal(88, 68, 0.8, 10) + sparkle(110, 24),
   special_croissant_herb: () => croissant(...BAKED, 0, 10) + cel("M52 50l12 -8l14 6l-12 8z", "#ffe27a", "#e9bf3f", { w: 3 }) + leaf(40, 64, -30, 0.7) + leaf(88, 64, 30, 0.7) + leaf(64, 74, 0, 0.6) + sparkle(110, 24),
+
+  // special recipes (green / orange / red)
+  special_onigiri_salted: () => onigiri("#f2c27a", "#c98f45") + line("M48 50l30 0M44 60l40 0", "#8a5a24", 3) + crystal(54, 40, 0.8, 10) + crystal(70, 46, 0.8, -20) + crystal(62, 30, 0.7, 30) + sparkle(106, 24),
+  special_breadstick_herb: () =>
+    [[-28, 0], [0, 8], [28, 16]].map(([rot, dy]) => g(`rotate(${rot} 64 ${66 + dy})`, cel(`M14 ${66 + dy}q0 -7 7 -7h86q7 0 7 7q0 7 -7 7h-86q-7 0 -7 -7z`, "#eeb05a", "#c47f2c", { w: 4 }))).join("") +
+    leaf(44, 52, 20, 0.5) + leaf(70, 66, -30, 0.5) + leaf(88, 84, 40, 0.5) + dot(56, 76, 2, "#3fa34d") + dot(80, 58, 2, "#3fa34d") + sparkle(108, 24),
+  special_pastry_salted: () =>
+    cel("M24 50h80l-6 50h-68z", "#f0b85e", "#c88a32") + line("M27 64h74M28 76h72M29 88h70", "#c88a32", 2.5) +
+    cel("M48 46l16 -8l18 6l-16 8z", "#ffe27a", "#e9bf3f", { w: 3 }) + crystal(40, 58, 0.8, 15) + crystal(86, 56, 0.8, -15) + crystal(64, 66, 0.7, 30) + sparkle(108, 26),
+  special_onigiri_spiced: () => onigiri() + dot(56, 42, 2.5, "#d9482b") + dot(66, 50, 2.5, "#f08a24") + dot(52, 58, 2.5, "#d9482b") + dot(74, 60, 2.5, "#f2c230") + dot(62, 36, 2, "#f08a24") + leaf(80, 40, 40, 0.6) + sparkle(106, 24),
+  special_sushi_seared: () => nigiri("#f08a5d", "#c9592f", "#ffd2bf") + line("M34 56l10 -6M54 50l12 -4M76 48l12 2", "#6b2a12", 4) + dot(46, 52, 2.2, "#d9482b") + dot(64, 46, 2.2, "#f2c230") + dot(84, 50, 2.2, "#f08a24") + flame(102, 36, 1) + sparkle(22, 30, 0.8),
+  special_pizza_truffle: () => pizzaE() + [[50, 60], [76, 78], [62, 72], [84, 60]].map(([x, y]) => flat(ell(x, y, 5, 4), "#4a3426", 2) + dot(x - 1, y - 1, 1.2, "#8a6a52")).join(""),
+  special_croissant_tart: () =>
+    flat("M30 100h68l-8 10h-52z", "#d9dde3", 4) + flat("M58 100v-8h12v8z", "#d9dde3", 3.5) + cel(ell(64, 90, 46, 10), "#ffffff", "#d9dde3", { w: 4 }) +
+    croissant("#ffcf3f", "#d99a1a", 4, 4, 0.9) + crown(64, 30, 0.9) + sparkle(110, 30) + sparkle(18, 50, 0.7),
+  special_sushi_emperor: () =>
+    cel("M6 78h116q-2 14 -12 30h-92q-10 -16 -12 -30z", "#ffd34d", "#d99a1a") + flat("M2 78q-2 -14 10 -20l6 20z", "#ffd34d", 4) + flat("M126 78q2 -14 -10 -20l-6 20z", "#ffd34d", 4) +
+    line("M16 92h96", "#d99a1a", 3) + dot(40, 98, 3, "#e0483a") + dot(64, 98, 3, "#3d6fb5") + dot(88, 98, 3, "#e0483a") +
+    mini(-4, 34, 0.5) + mini(28, 30, 0.5, ...TUNA) + mini(60, 34, 0.5, ...TAMAGO) + crown(64, 24, 1.1) + sparkle(110, 18) + sparkle(18, 22, 0.7),
 };
 
 mkdirSync(OUT, { recursive: true });

@@ -60,12 +60,18 @@ describe("seasonings and recipes", () => {
   });
 
   it("recipes combine a seasoning and a dish in either order into a final special dish", () => {
-    expect(recipes).toHaveLength(6);
+    const count = (tier: string) => recipes.filter((r) => r.tier === tier).length;
+    expect([count("daily"), count("green"), count("orange"), count("red")]).toEqual([6, 5, 2, 1]);
+    const pairs = recipes.map((r) => `${r.seasoning}+${r.dish}`);
+    expect(new Set(pairs).size).toBe(pairs.length);
+    const all = () => true;
     for (const r of recipes) {
       expect(getItem(r.seasoning)?.category).toBe("seasoning");
       expect(getItem(r.dish)?.category).toBe("dish");
-      expect(mergeResult(r.seasoning, r.dish)).toBe(r.result.id);
-      expect(mergeResult(r.dish, r.seasoning)).toBe(r.result.id);
+      expect(mergeResult(r.seasoning, r.dish, all)).toBe(r.result.id);
+      expect(mergeResult(r.dish, r.seasoning, all)).toBe(r.result.id);
+      // special recipes need unlocking; by default only daily ones merge
+      expect(mergeResult(r.seasoning, r.dish)).toBe(r.tier === "daily" ? r.result.id : null);
       const info = getItem(r.result.id)!;
       expect(info.kind).toBe("special");
       expect(info.stageIndex).toBe(getItem(r.dish)!.stageIndex);

@@ -1,11 +1,12 @@
 import { Application, Container, Graphics, Rectangle, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
-import { Game, STATIONS, STATION_SLOTS, type StationId } from "../core/game";
+import { Game, STATIONS, STATION_SLOTS, prepSlotUnlockStage, type StationId } from "../core/game";
 import { story, type Requirement } from "../core/orders";
-import { getItem, itemLabel } from "../core/registry";
+import { getItem, itemLabel, recipeFor, type RecipeTier } from "../core/registry";
 import { STATION_NAMES } from "../core/shop";
 import { VIEW_H, VIEW_W } from "./layout";
 import { ShopView } from "./ShopView";
+import { RecipeView } from "./RecipeView";
 import { WarehouseView } from "./WarehouseView";
 import { iconSprite } from "./icons";
 import { addButton, makeText, type Rect } from "./ui";
@@ -16,8 +17,12 @@ const BOARD_X = (VIEW_W - COLS * CELL) / 2;
 const BOARD_Y = 266;
 const GRID_Y = BOARD_Y + CELL;
 const DRAG_THRESHOLD = 6;
-/** Icon size on order cards. */
+/** Icon size on random order cards. */
 const ICON_SMALL = 26;
+/** Icon size and column width on the story card. */
+const STORY_ICON = 32;
+const STORY_COL = 50;
+const TOAST_MS = 2500;
 
 const CHAIN_COLORS: Record<string, number> = {
   pizza: 0xe8b04a,
@@ -28,6 +33,7 @@ const CHAIN_COLORS: Record<string, number> = {
 };
 
 const STATION_COLORS: Record<StationId, number> = { prep: 0x6b5235, spice: 0x4f6138 };
+const TIER_COLORS: Record<RecipeTier, number> = { daily: 0xffd27a, green: 0x4caf50, orange: 0xf08a24, red: 0xe0483a };
 
 interface Drag {
   from: number;
@@ -45,6 +51,9 @@ export class GameView {
   private readonly hud: Text;
   private readonly shop: ShopView;
   private readonly warehouse: WarehouseView;
+  private readonly recipes: RecipeView;
+  private readonly toast = new Container();
+  private toastUntil = 0;
   private drag: Drag | null = null;
 
   constructor(
@@ -62,7 +71,9 @@ export class GameView {
     };
     this.shop = new ShopView(game, changed);
     this.warehouse = new WarehouseView(game, changed);
-    this.root.addChild(this.shop.container, this.warehouse.container);
+    this.recipes = new RecipeView(game);
+    this.toast.eventMode = "none";
+    this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.toast);
     app.stage.addChild(this.root);
 
     app.stage.eventMode = "static";
@@ -90,7 +101,23 @@ export class GameView {
     const e = this.game.energy;
     const next = e.msToNext(now);
     const timer = next > 0 ? ` +1 ${Math.ceil(next / 1000)}s` : "";
-    this.hud.text = `⚡ ${e.value}/${e.max}${timer}  🪙 ${this.game.coins}`;
+    this.hud.text = `⚡${e.value}/${e.max}${timer}  🪙${this.game.coins}`;
+    this.updateToast(now);
+  }
+
+  /** Show queued game notices one at a time near the middle of the screen. */
+  private updateToast(now: number) {
+    if (now < this.toastUntil) return;
+    this.toast.removeChildren().forEach((c) => c.destroy());
+    const msg = this.game.notices.shift();
+    if (!msg) return;
+    const t = makeText(msg, 0, 0, 15, 0xffffff);
+    const w = t.width + 28;
+    const x = (VIEW_W - w) / 2;
+    const y = BOARD_Y + 110;
+    t.position.set(x + 14, y + 10);
+    this.toast.addChild(new Graphics().roundRect(x, y, w, t.height + 20, 12).fill({ color: 0x000000, alpha: 0.82 }).stroke({ width: 2, color: 0xffd27a }), t);
+    this.toastUntil = now + TOAST_MS;
   }
 
   private cellRect(i: number): Rect {
@@ -134,6 +161,19 @@ export class GameView {
     });
   }
 
+  /** Story requirements as icon columns with "label have/need" underneath; tap target-free so the card stays compact. */
+  private drawStoryRequirements(reqs: readonly Requirement[], x: number, y: number) {
+    reqs.forEach((r, i) => {
+      const have = this.game.board.count(r.itemId);
+      const cx = x + i * STORY_COL;
+      const icon = iconSprite(r.itemId, cx + (STORY_COL - STORY_ICON) / 2 - 4, y, STORY_ICON);
+      if (icon) this.layer.addChild(icon);
+      const t = makeText(`${itemLabel(r.itemId)} ${Math.min(have, r.count)}/${r.count}`, 0, y + STORY_ICON + 2, 10, have >= r.count ? 0x8fe388 : 0xffffff);
+      t.x = cx + (STORY_COL - t.width) / 2 - 4;
+      this.layer.addChild(t);
+    });
+  }
+
   /** Button whose action mutates the game; the board is redrawn and the save hook fires afterwards. */
   private button(rect: Rect, label: string, enabled: boolean, action: () => void) {
     addButton(this.layer, rect, label, enabled, () => {
@@ -146,8 +186,9 @@ export class GameView {
   /** Lives in the rebuilt layer so the warehouse count stays current. */
   private drawHudButtons() {
     const n = this.game.warehouse.length;
-    addButton(this.layer, { x: VIEW_W - 162, y: 6, w: 72, h: 28 }, n > 0 ? `📦 倉庫 ${n}` : "📦 倉庫", true, () => this.warehouse.open());
-    addButton(this.layer, { x: VIEW_W - 84, y: 6, w: 72, h: 28 }, "🛒 商店", true, () => this.shop.open());
+    addButton(this.layer, { x: VIEW_W - 200, y: 6, w: 60, h: 28 }, "📖食譜", true, () => this.recipes.open());
+    addButton(this.layer, { x: VIEW_W - 136, y: 6, w: 60, h: 28 }, n > 0 ? `📦倉庫${n}` : "📦倉庫", true, () => this.warehouse.open());
+    addButton(this.layer, { x: VIEW_W - 72, y: 6, w: 60, h: 28 }, "🛒商店", true, () => this.shop.open());
   }
 
   private drawOrders() {
@@ -155,11 +196,18 @@ export class GameView {
     const stage = g.currentStage;
 
     const storyRect: Rect = { x: 12, y: 40, w: VIEW_W - 24, h: 86 };
-    this.layer.addChild(new Graphics().roundRect(storyRect.x, storyRect.y, storyRect.w, storyRect.h, 10).fill(0x3d3028));
+    const boss = !!stage?.boss;
+    const card = new Graphics().roundRect(storyRect.x, storyRect.y, storyRect.w, storyRect.h, 10).fill(boss ? 0x4a2020 : 0x3d3028);
+    if (boss) card.stroke({ width: 3, color: 0xe0483a });
+    this.layer.addChild(card);
     if (stage) {
-      this.layer.addChild(makeText(`劇情 ${g.stageIndex + 1}/${story.stages.length}　${stage.title}　獎勵 🪙${stage.reward} ⚡${stage.rewardEnergy}`, 22, 46, 13, 0xffd27a));
-      this.drawRequirements(stage.requirements, 22, 70, 82, 3, 34);
-      this.button({ x: 276, y: 74, w: 62, h: 34 }, "交付", g.canDeliverStory(), () => g.deliverStory());
+      const head = `${boss ? "👑 BOSS　" : ""}第 ${g.stageIndex + 1}/${story.stages.length} 關　${stage.title}${stage.rewardShard ? "　🧩+1" : ""}`;
+      this.layer.addChild(makeText(head, 22, 46, 13, boss ? 0xff8a7a : 0xffd27a));
+      this.drawStoryRequirements(stage.requirements, 22, 66);
+      this.button({ x: 276, y: 68, w: 62, h: 32 }, "交付", g.canDeliverStory(), () => g.deliverStory());
+      const reward = makeText(`🪙${stage.reward} ⚡${stage.rewardEnergy}`, 0, 104, 10, 0xd8cbb8);
+      reward.x = 307 - reward.width / 2;
+      this.layer.addChild(reward);
     } else {
       this.layer.addChild(makeText("🎉 劇情全部完成！", 22, 70, 16, 0xffd27a));
     }
@@ -173,18 +221,21 @@ export class GameView {
     });
   }
 
-  /** Top row: prep station (left 3) and spice rack (right 3). Tap a generator to produce; locked slots open the shop. */
+  /** Top row: prep station (left 5) and seasoning area (right 1). Tap a generator to produce; empty slots open the warehouse. */
   private drawStations() {
     const g = this.game;
     for (const station of STATIONS) {
       const first = this.slotRect(station, 0);
       const color = STATION_COLORS[station];
-      this.layer.addChild(new Graphics().roundRect(first.x, first.y, CELL * STATION_SLOTS, CELL, 8).fill(0x2a2420).stroke({ width: 2, color }));
-      for (let slot = 0; slot < STATION_SLOTS; slot++) {
+      this.layer.addChild(new Graphics().roundRect(first.x, first.y, CELL * STATION_SLOTS[station], CELL, 8).fill(0x2a2420).stroke({ width: 2, color }));
+      for (let slot = 0; slot < STATION_SLOTS[station]; slot++) {
         const r = this.slotRect(station, slot);
         const id = g.stations[station][slot];
         if (slot >= g.slotsOpen[station]) {
-          this.slotHint(r, `🔒\n${STATION_NAMES[station]}`, () => this.shop.open());
+          const at = prepSlotUnlockStage(slot);
+          this.slotHint(r, at ? `🔒\n第${at}關` : "🔒", () => {
+            if (at) g.notices.push(`🔒 通過第 ${at} 關開放這一格`);
+          });
         } else if (!id) {
           this.slotHint(r, `${STATION_NAMES[station]}\n空`, () => this.warehouse.open());
         } else {
@@ -241,7 +292,8 @@ export class GameView {
     if (info.kind === "generator") {
       c.addChild(new Graphics().roundRect(3, 3, CELL - 6, CELL - 6, 8).fill(0x1f1a17).stroke({ width: 3, color }));
     } else if (info.kind === "special") {
-      c.addChild(new Graphics().roundRect(3, 3, CELL - 6, CELL - 6, 8).stroke({ width: 2, color: 0xffd27a, alpha: 0.8 }));
+      const tier = recipeFor(id)?.tier ?? "daily";
+      c.addChild(new Graphics().roundRect(3, 3, CELL - 6, CELL - 6, 8).stroke({ width: tier === "daily" ? 2 : 3, color: TIER_COLORS[tier], alpha: 0.9 }));
     }
     if (icon) {
       c.addChild(icon);

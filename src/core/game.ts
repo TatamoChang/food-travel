@@ -9,7 +9,8 @@ import {
   type StoryStage,
 } from "./orders";
 import { getProduct, type ProductEffect } from "./shop";
-import { generatorOutput, getAnyChain, getChain, getItem, stationOf } from "./registry";
+import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, stationOf } from "./registry";
+import { SHARDS_NEEDED, SHARD_RECIPE, taskProgress, tasks } from "./tasks";
 import { mulberry32, type Rng } from "./rng";
 import type { MoveResult } from "./board";
 import type { StationId } from "./types";
@@ -17,10 +18,8 @@ import type { StationId } from "./types";
 export type { StationId };
 
 export const STATIONS: readonly StationId[] = ["prep", "spice"];
-/** Slots per station (the top row of the screen: 3 prep + 3 spice). */
-export const STATION_SLOTS = 3;
-/** Slots open at the start; the rest are bought in the shop. */
-export const STATION_SLOTS_OPEN = 1;
+/** Slots per station; together they fill the top row of the screen (5 prep + 1 spice). */
+export const STATION_SLOTS: Record<StationId, number> = { prep: 5, spice: 1 };
 /** Old saves had a 6x8 board whose top row is now the stations. */
 const LEGACY_BOARD_CELLS = COLS * (ROWS + 1);
 
@@ -49,18 +48,34 @@ export interface GameState {
   boosts: ActiveBoost[];
   /** Generators on each station, STATION_SLOTS entries each. */
   stations: Record<StationId, Cell[]>;
-  /** Open slot count per station. */
-  slotsOpen: Record<StationId, number>;
   /** Unlimited storage: generators that are not on a station, and items moved off the board by save migration. */
   warehouse: string[];
+  /** Unlocked special recipes (result item ids). Daily recipes need no unlock. */
+  unlockedRecipes: string[];
+  /** Times each item id was produced by a merge (for tasks). */
+  made: Record<string, number>;
+  /** Random orders delivered in total (for tasks). */
+  randomDelivered: number;
+  /** Boss-stage recipe shards collected. */
+  shards: number;
 }
 
 /** What may come out of localStorage: current saves, or older ones that lack newer fields. */
-export type SavedState = Omit<GameState, "maxEnergyBonus" | "purchased" | "boosts" | "stations" | "slotsOpen" | "warehouse"> &
+export type SavedState = Omit<
+  GameState,
+  "maxEnergyBonus" | "purchased" | "boosts" | "stations" | "warehouse" | "unlockedRecipes" | "made" | "randomDelivered" | "shards"
+> &
   Partial<GameState> & {
     /** v1 field: generators waiting for a free board cell. */
     pendingGenerators?: string[];
   };
+
+/** 1-based story stage whose completion opens prep slot `slot` (0-based), or null when it never opens. */
+export function prepSlotUnlockStage(slot: number): number | null {
+  if (slot === 0) return null;
+  const stages = story.stages.flatMap((s, i) => (s.opensPrepSlot ? [i + 1] : []));
+  return stages[slot - 1] ?? null;
+}
 
 export type TapResult =
   | { ok: true; spawnedAt: number }
@@ -74,10 +89,10 @@ export type DeliverResult = { ok: false } | { ok: true; stageCompleted: boolean 
 
 const cloneOrder = (o: RandomOrder): RandomOrder => ({ ...o, requirements: o.requirements.map((r) => ({ ...r })) });
 
-const emptyStation = (): Cell[] => new Array<Cell>(STATION_SLOTS).fill(null);
+const emptyStation = (station: StationId): Cell[] => new Array<Cell>(STATION_SLOTS[station]).fill(null);
 
 export function newState(now: number): GameState {
-  const prep = emptyStation();
+  const prep = emptyStation("prep");
   prep[0] = getChain(story.initialUnlocked[0])!.generator.id;
   return {
     board: new Board().cells,
@@ -90,9 +105,12 @@ export function newState(now: number): GameState {
     maxEnergyBonus: 0,
     purchased: [],
     boosts: [],
-    stations: { prep, spice: emptyStation() },
-    slotsOpen: { prep: STATION_SLOTS_OPEN, spice: STATION_SLOTS_OPEN },
+    stations: { prep, spice: emptyStation("spice") },
     warehouse: [],
+    unlockedRecipes: [],
+    made: {},
+    randomDelivered: 0,
+    shards: 0,
   };
 }
 
@@ -104,8 +122,13 @@ export class Game {
   unlocked: string[];
   randomOrders: RandomOrder[];
   readonly stations: Record<StationId, Cell[]>;
-  readonly slotsOpen: Record<StationId, number>;
   readonly warehouse: string[];
+  readonly unlockedRecipes: string[];
+  readonly made: Record<string, number>;
+  randomDelivered: number;
+  shards: number;
+  /** Short messages for the player (unlocks etc.); the view shows and clears them. */
+  readonly notices: string[] = [];
   private nextOrderId: number;
   private maxEnergyBonus: number;
   private purchased: string[];
@@ -127,10 +150,13 @@ export class Game {
     this.unlocked = [...s.unlocked];
     this.randomOrders = s.randomOrders.map(cloneOrder);
     this.nextOrderId = s.nextOrderId;
-    // Saves from before the stations lack these fields.
-    this.stations = { prep: [...(s.stations?.prep ?? emptyStation())], spice: [...(s.stations?.spice ?? emptyStation())] };
-    this.slotsOpen = { prep: s.slotsOpen?.prep ?? STATION_SLOTS_OPEN, spice: s.slotsOpen?.spice ?? STATION_SLOTS_OPEN };
+    // Saves from before the stations / recipes lack these fields.
     this.warehouse = [...(s.warehouse ?? [])];
+    this.stations = { prep: this.fitStation("prep", s.stations?.prep), spice: this.fitStation("spice", s.stations?.spice) };
+    this.unlockedRecipes = [...(s.unlockedRecipes ?? [])];
+    this.made = { ...(s.made ?? {}) };
+    this.randomDelivered = s.randomDelivered ?? 0;
+    this.shards = s.shards ?? 0;
 
     if (s.board.length === LEGACY_BOARD_CELLS) {
       this.board = new Board(s.board.slice(COLS));
@@ -139,7 +165,30 @@ export class Game {
       this.board = new Board(s.board);
     }
     this.catchUpUnlocks();
+    this.checkRecipeUnlocks();
+    this.notices.length = 0;
     this.refillRandomOrders();
+  }
+
+  /** Open slots per station: prep starts with 1 and gains one per finished stage marked opensPrepSlot; spice has 1. */
+  get slotsOpen(): Record<StationId, number> {
+    const opened = story.stages.slice(0, this.stageIndex).filter((s) => s.opensPrepSlot).length;
+    return { prep: Math.min(STATION_SLOTS.prep, 1 + opened), spice: STATION_SLOTS.spice };
+  }
+
+  /** Station contents resized to its slot count; generators that no longer fit go to the warehouse. */
+  private fitStation(station: StationId, saved: readonly Cell[] | undefined): Cell[] {
+    const cells = emptyStation(station);
+    (saved ?? []).forEach((id, i) => {
+      if (id === null) return;
+      if (i < cells.length) cells[i] = id;
+      else this.warehouse.push(id);
+    });
+    return cells;
+  }
+
+  isRecipeUnlocked(resultId: string): boolean {
+    return recipeFor(resultId)?.tier === "daily" || this.unlockedRecipes.includes(resultId);
   }
 
   get storyCompleted(): boolean {
@@ -173,7 +222,7 @@ export class Game {
 
   /** Board cell an item from this station slot spawns closest to: the top cell of the same screen column. */
   static spawnOrigin(station: StationId, slot: number): number {
-    return (station === "prep" ? 0 : STATION_SLOTS) + slot;
+    return (station === "prep" ? 0 : STATION_SLOTS.prep) + slot;
   }
 
   /** Tap the generator in a station slot: spends energy, spawns its first item in the nearest empty board cell. */
@@ -189,8 +238,14 @@ export class Game {
     return { ok: true, spawnedAt: this.board.spawnNear(generatorOutput(id)!, origin)! };
   }
 
+  /** Drag on the board; counts merges for tasks. */
   move(from: number, to: number): MoveResult {
-    return this.board.move(from, to);
+    const r = this.board.move(from, to, (id) => this.isRecipeUnlocked(id));
+    if (r.type === "merged") {
+      this.made[r.result] = (this.made[r.result] ?? 0) + 1;
+      this.checkRecipeUnlocks();
+    }
+    return r;
   }
 
   /** True when the station slot holds a generator that can go back to the warehouse. */
@@ -253,6 +308,8 @@ export class Game {
     if (!order || !this.canFulfil(order.requirements)) return { ok: false };
     for (const r of order.requirements) this.board.take(r.itemId, r.count);
     this.coins += order.reward;
+    this.randomDelivered++;
+    this.checkRecipeUnlocks();
     this.randomOrders = this.randomOrders.filter((o) => o.id !== orderId);
     this.refillRandomOrders();
     return { ok: true, stageCompleted: false };
@@ -292,8 +349,11 @@ export class Game {
       purchased: [...this.purchased],
       boosts: this.boosts.map((b) => ({ ...b })),
       stations: { prep: [...this.stations.prep], spice: [...this.stations.spice] },
-      slotsOpen: { ...this.slotsOpen },
       warehouse: [...this.warehouse],
+      unlockedRecipes: [...this.unlockedRecipes],
+      made: { ...this.made },
+      randomDelivered: this.randomDelivered,
+      shards: this.shards,
     };
   }
 
@@ -312,10 +372,25 @@ export class Game {
         else this.boosts.push({ productId, amount: effect.amount, expiresAt: t + effect.durationMinutes * 60_000 });
         break;
       }
-      case "openSlot":
-        this.slotsOpen[effect.station] = Math.min(STATION_SLOTS, this.slotsOpen[effect.station] + 1);
+      case "unlockRecipe":
+        this.unlockRecipe(effect.recipe);
         break;
     }
+  }
+
+  private unlockRecipe(resultId: string) {
+    if (this.unlockedRecipes.includes(resultId)) return;
+    this.unlockedRecipes.push(resultId);
+    this.notices.push(`📖 解鎖食譜「${getItem(resultId)!.name}」`);
+  }
+
+  /** Unlock recipes whose task is done, and the shard recipe once enough shards are collected. */
+  private checkRecipeUnlocks() {
+    for (const t of tasks) {
+      const p = taskProgress(t, this);
+      if (p.have >= p.need) this.unlockRecipe(t.rewardRecipe);
+    }
+    if (this.shards >= SHARDS_NEEDED) this.unlockRecipe(SHARD_RECIPE);
   }
 
   private freeSlot(station: StationId): number | null {
@@ -327,8 +402,11 @@ export class Game {
   private stowGenerator(id: string) {
     const station = stationOf(id);
     const slot = this.freeSlot(station);
-    if (slot === null) this.warehouse.push(id);
-    else this.stations[station][slot] = id;
+    if (slot !== null) this.stations[station][slot] = id;
+    else {
+      this.warehouse.push(id);
+      this.notices.push(`📦 ${getItem(id)!.name}放進倉庫了`);
+    }
   }
 
   private unlock(chainId: string) {
@@ -340,8 +418,15 @@ export class Game {
   private completeStage(stage: StoryStage) {
     this.coins += stage.reward;
     this.energy.add(stage.rewardEnergy, this.now());
-    for (const chainId of stage.unlocks) this.unlock(chainId);
+    // Advance first so a slot opened by this stage can take the generators it unlocks.
     this.stageIndex++;
+    for (const chainId of stage.unlocks) this.unlock(chainId);
+    if (stage.opensPrepSlot) this.notices.push(`🔓 料理台第 ${this.slotsOpen.prep} 格開放了`);
+    if (stage.rewardShard) {
+      this.shards += stage.rewardShard;
+      this.notices.push(`🧩 獲得食譜碎片（${Math.min(this.shards, SHARDS_NEEDED)}/${SHARDS_NEEDED}）`);
+      this.checkRecipeUnlocks();
+    }
   }
 
   /** Grant unlocks of stages already finished, e.g. seasonings added to story.json after the save was made. */
@@ -374,7 +459,7 @@ export class Game {
 
   private refillRandomOrders() {
     while (this.randomOrders.length < RANDOM_ORDER_SLOTS) {
-      this.randomOrders.push(generateRandomOrder(this.nextOrderId++, this.rng, this.unlocked, this.stageIndex));
+      this.randomOrders.push(generateRandomOrder(this.nextOrderId++, this.rng, this.unlocked, this.stageIndex, this.unlockedRecipes));
     }
   }
 }

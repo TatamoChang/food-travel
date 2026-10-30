@@ -1,5 +1,5 @@
 import { Graphics, type Container } from "pixi.js";
-import { STATIONS, STATION_SLOTS, type Game } from "../core/game";
+import { STATIONS, STATION_SLOTS, prepSlotUnlockStage, type Game } from "../core/game";
 import { getItem, itemLabel } from "../core/registry";
 import { STATION_NAMES } from "../core/shop";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
@@ -42,9 +42,9 @@ export class WarehouseView extends ScrollPanel {
       for (const station of STATIONS) {
         list.addChild(makeText(STATION_NAMES[station], PANEL_X + 16, y + 4, 14, 0x9fc3e8));
         y += SECTION_H;
-        for (let slot = 0; slot < STATION_SLOTS; slot++) {
+        for (let slot = 0; slot < STATION_SLOTS[station]; slot++) {
           const id = g.stations[station][slot];
-          if (slot >= g.slotsOpen[station]) this.row(list, y, `第 ${slot + 1} 格　🔒 到商店開放`, 0x8a847b);
+          if (slot >= g.slotsOpen[station]) this.row(list, y, `第 ${slot + 1} 格　🔒 通過第 ${prepSlotUnlockStage(slot)} 關開放`, 0x8a847b);
           else if (!id) this.row(list, y, `第 ${slot + 1} 格　（空）`, 0x8a847b);
           else {
             this.row(list, y, `第 ${slot + 1} 格　${getItem(id)!.name}`, 0xffffff, id);
