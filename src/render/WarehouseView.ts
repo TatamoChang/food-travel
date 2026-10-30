@@ -3,6 +3,7 @@ import { STATIONS, STATION_SLOTS, type Game } from "../core/game";
 import { getItem, itemLabel } from "../core/registry";
 import { STATION_NAMES } from "../core/shop";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
+import { iconSprite } from "./icons";
 import { makeText } from "./ui";
 
 const ROW_H = 44;
@@ -27,9 +28,11 @@ export class WarehouseView extends ScrollPanel {
     this.onChange();
   }
 
-  private row(list: Container, y: number, label: string, color: number) {
+  private row(list: Container, y: number, label: string, color: number, itemId?: string) {
     list.addChild(new Graphics().roundRect(PANEL_X + 12, y, PANEL_W - 24, ROW_H - 6, 8).fill(0x3d3028));
-    list.addChild(makeText(label, PANEL_X + 24, y + 10, 14, color));
+    const icon = itemId ? iconSprite(itemId, PANEL_X + 18, y + 3, 32) : null;
+    if (icon) list.addChild(icon);
+    list.addChild(makeText(label, PANEL_X + (icon ? 56 : 24), y + 10, 14, color));
   }
 
   private render() {
@@ -44,7 +47,7 @@ export class WarehouseView extends ScrollPanel {
           if (slot >= g.slotsOpen[station]) this.row(list, y, `第 ${slot + 1} 格　🔒 到商店開放`, 0x8a847b);
           else if (!id) this.row(list, y, `第 ${slot + 1} 格　（空）`, 0x8a847b);
           else {
-            this.row(list, y, `第 ${slot + 1} 格　${getItem(id)!.name}`, 0xffffff);
+            this.row(list, y, `第 ${slot + 1} 格　${getItem(id)!.name}`, 0xffffff, id);
             this.button(list, { x: PANEL_X + PANEL_W - 88, y: y + 5, w: 64, h: 28 }, "收回", true, () =>
               this.act(() => g.storeFromStation(station, slot)),
             );
@@ -62,7 +65,7 @@ export class WarehouseView extends ScrollPanel {
       g.warehouse.forEach((id, i) => {
         const info = getItem(id)!;
         const label = info.kind === "generator" ? `${info.name}（產出器）` : `${itemLabel(id)} ${info.name}`;
-        this.row(list, y, label, 0xffffff);
+        this.row(list, y, label, 0xffffff, id);
         this.button(list, { x: PANEL_X + PANEL_W - 88, y: y + 5, w: 64, h: 28 }, "放入", g.canPlace(i), () =>
           this.act(() => g.placeFromWarehouse(i)),
         );

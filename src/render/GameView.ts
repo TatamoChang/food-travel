@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, type Text, type FederatedPointerEvent } from "pixi.js";
+import { Application, Container, Graphics, Rectangle, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
 import { Game, STATIONS, STATION_SLOTS, type StationId } from "../core/game";
 import { story, type Requirement } from "../core/orders";
@@ -7,6 +7,7 @@ import { STATION_NAMES } from "../core/shop";
 import { VIEW_H, VIEW_W } from "./layout";
 import { ShopView } from "./ShopView";
 import { WarehouseView } from "./WarehouseView";
+import { iconSprite } from "./icons";
 import { addButton, makeText, type Rect } from "./ui";
 
 const CELL = 56;
@@ -15,6 +16,8 @@ const BOARD_X = (VIEW_W - COLS * CELL) / 2;
 const BOARD_Y = 266;
 const GRID_Y = BOARD_Y + CELL;
 const DRAG_THRESHOLD = 6;
+/** Icon size on order cards. */
+const ICON_SMALL = 26;
 
 const CHAIN_COLORS: Record<string, number> = {
   pizza: 0xe8b04a,
@@ -122,7 +125,12 @@ export class GameView {
       const col = i % perRow;
       const row = Math.floor(i / perRow);
       const label = `${itemLabel(r.itemId)} ${info.name}\n${Math.min(have, r.count)}/${r.count}`;
-      this.layer.addChild(makeText(label, x + col * colW, y + row * lineH, 12, have >= r.count ? 0x8fe388 : 0xffffff, colW - 4));
+      const ix = x + col * colW;
+      const iy = y + row * lineH;
+      const icon = iconSprite(r.itemId, ix, iy + 2, ICON_SMALL);
+      if (icon) this.layer.addChild(icon);
+      const tx = icon ? ix + ICON_SMALL + 2 : ix;
+      this.layer.addChild(makeText(label, tx, iy, 11, have >= r.count ? 0x8fe388 : 0xffffff, colW - (tx - ix) - 2));
     });
   }
 
@@ -228,22 +236,26 @@ export class GameView {
     const info = getItem(id)!;
     const color = CHAIN_COLORS[info.chainId] ?? 0x999999;
     const c = new Container();
-    const g = new Graphics().roundRect(4, 4, CELL - 8, CELL - 8, 8);
+    c.hitArea = new Rectangle(0, 0, CELL, CELL);
+    const icon = iconSprite(id, 4, 4, CELL - 8);
     if (info.kind === "generator") {
-      g.fill(0x1f1a17).stroke({ width: 3, color });
+      c.addChild(new Graphics().roundRect(3, 3, CELL - 6, CELL - 6, 8).fill(0x1f1a17).stroke({ width: 3, color }));
     } else if (info.kind === "special") {
-      g.fill(color).stroke({ width: 3, color: 0xffd27a });
-    } else {
-      g.fill(color);
-      const steps = info.category === "seasoning" ? 2 : 4;
-      g.alpha = 0.55 + (info.stageIndex / steps) * 0.45;
+      c.addChild(new Graphics().roundRect(3, 3, CELL - 6, CELL - 6, 8).stroke({ width: 2, color: 0xffd27a, alpha: 0.8 }));
     }
-    c.addChild(g);
-    const lt = makeText(itemLabel(id), 8, 6, 13, info.kind === "generator" ? color : 0x1f1a17);
-    lt.style.fontWeight = "bold";
-    c.addChild(lt);
-    const name = makeText(info.name, 6, 24, 10, info.kind === "generator" ? 0xffffff : 0x1f1a17, CELL - 12);
-    c.addChild(name);
+    if (icon) {
+      c.addChild(icon);
+    } else {
+      // No icon drawn yet: coloured block with the name.
+      const g = new Graphics().roundRect(4, 4, CELL - 8, CELL - 8, 8).fill(color);
+      c.addChild(g, makeText(info.name, 6, 24, 10, 0x1f1a17, CELL - 12));
+    }
+    if (info.kind !== "generator") {
+      const lt = makeText(itemLabel(id), 4, 2, 12, 0xffffff);
+      lt.style.fontWeight = "bold";
+      lt.style.stroke = { color: 0x1d1712, width: 3 };
+      c.addChild(lt);
+    }
     return c;
   }
 
