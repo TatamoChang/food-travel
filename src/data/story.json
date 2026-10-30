@@ -10,6 +10,7 @@
       ],
       "reward": 30,
       "rewardEnergy": 5,
+      "opensPrepSlot": true,
       "unlocks": ["sushi"]
     },
     {
@@ -21,7 +22,7 @@
       ],
       "reward": 60,
       "rewardEnergy": 10,
-      "unlocks": ["croissant"]
+      "unlocks": ["croissant", "salt"]
     },
     {
       "id": "s3",
@@ -33,30 +34,332 @@
       ],
       "reward": 100,
       "rewardEnergy": 10,
-      "unlocks": []
+      "unlocks": ["spice"]
     },
     {
       "id": "s4",
-      "title": "美食家的挑戰",
+      "title": "拿坡里小巷",
       "requirements": [
         { "itemId": "pizza_e", "count": 1 },
-        { "itemId": "sushi_d", "count": 1 },
-        { "itemId": "croissant_d", "count": 1 }
+        { "itemId": "croissant_c", "count": 1 }
       ],
-      "reward": 200,
-      "rewardEnergy": 15,
+      "reward": 150,
+      "rewardEnergy": 12,
       "unlocks": []
     },
     {
       "id": "s5",
-      "title": "環球盛宴",
+      "title": "築地早市",
+      "requirements": [
+        { "itemId": "sushi_d", "count": 2 }
+      ],
+      "reward": 180,
+      "rewardEnergy": 12,
+      "unlocks": []
+    },
+    {
+      "id": "s6",
+      "title": "蒙馬特畫家",
+      "requirements": [
+        { "itemId": "croissant_d", "count": 1 },
+        { "itemId": "pizza_d", "count": 2 }
+      ],
+      "reward": 210,
+      "rewardEnergy": 12,
+      "unlocks": []
+    },
+    {
+      "id": "s7",
+      "title": "威尼斯運河",
       "requirements": [
         { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 }
+      ],
+      "reward": 240,
+      "rewardEnergy": 14,
+      "unlocks": []
+    },
+    {
+      "id": "s8",
+      "title": "京都茶屋",
+      "requirements": [
+        { "itemId": "sushi_e", "count": 1 },
+        { "itemId": "croissant_c", "count": 1 }
+      ],
+      "reward": 270,
+      "rewardEnergy": 14,
+      "unlocks": []
+    },
+    {
+      "id": "s9",
+      "title": "里昂市集",
+      "requirements": [
+        { "itemId": "croissant_e", "count": 1 },
+        { "itemId": "pizza_d", "count": 1 }
+      ],
+      "reward": 300,
+      "rewardEnergy": 15,
+      "unlocks": []
+    },
+    {
+      "id": "s10",
+      "title": "米其林評審",
+      "boss": true,
+      "requirements": [
+        { "itemId": "pizza_e", "count": 2 },
         { "itemId": "sushi_e", "count": 1 },
         { "itemId": "croissant_e", "count": 1 }
       ],
-      "reward": 500,
+      "reward": 800,
       "rewardEnergy": 25,
+      "rewardShard": 1,
+      "unlocks": []
+    },
+    {
+      "id": "s11",
+      "title": "佛羅倫斯的午後",
+      "requirements": [
+        { "itemId": "special_pizza_spiced", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 },
+        { "itemId": "croissant_d", "count": 1 }
+      ],
+      "reward": 350,
+      "rewardEnergy": 15,
+      "opensPrepSlot": true,
+      "unlocks": []
+    },
+    {
+      "id": "s12",
+      "title": "大阪食倒",
+      "requirements": [
+        { "itemId": "special_sushi_salted", "count": 1 },
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 }
+      ],
+      "reward": 380,
+      "rewardEnergy": 15,
+      "unlocks": []
+    },
+    {
+      "id": "s13",
+      "title": "波爾多酒莊",
+      "requirements": [
+        { "itemId": "special_croissant_salted", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 },
+        { "itemId": "pizza_d", "count": 1 }
+      ],
+      "reward": 410,
+      "rewardEnergy": 16,
+      "unlocks": []
+    },
+    {
+      "id": "s14",
+      "title": "西西里海岸",
+      "requirements": [
+        { "itemId": "special_pizza_secret", "count": 1 },
+        { "itemId": "sushi_e", "count": 1 },
+        { "itemId": "pizza_e", "count": 1 }
+      ],
+      "reward": 440,
+      "rewardEnergy": 16,
+      "unlocks": []
+    },
+    {
+      "id": "s15",
+      "title": "北海道雪祭",
+      "requirements": [
+        { "itemId": "special_sushi_platter", "count": 1 },
+        { "itemId": "sushi_e", "count": 1 },
+        { "itemId": "croissant_d", "count": 1 }
+      ],
+      "reward": 470,
+      "rewardEnergy": 17,
+      "unlocks": []
+    },
+    {
+      "id": "s16",
+      "title": "普羅旺斯花田",
+      "requirements": [
+        { "itemId": "special_croissant_herb", "count": 1 },
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 }
+      ],
+      "reward": 500,
+      "rewardEnergy": 17,
+      "unlocks": []
+    },
+    {
+      "id": "s17",
+      "title": "米蘭時裝週",
+      "requirements": [
+        { "itemId": "special_pizza_spiced", "count": 2 },
+        { "itemId": "sushi_e", "count": 1 }
+      ],
+      "reward": 540,
+      "rewardEnergy": 18,
+      "unlocks": []
+    },
+    {
+      "id": "s18",
+      "title": "奈良鹿公園",
+      "requirements": [
+        { "itemId": "special_sushi_salted", "count": 2 },
+        { "itemId": "croissant_e", "count": 1 }
+      ],
+      "reward": 580,
+      "rewardEnergy": 18,
+      "unlocks": []
+    },
+    {
+      "id": "s19",
+      "title": "尼斯藍色海岸",
+      "requirements": [
+        { "itemId": "special_croissant_salted", "count": 2 },
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 }
+      ],
+      "reward": 620,
+      "rewardEnergy": 19,
+      "unlocks": []
+    },
+    {
+      "id": "s20",
+      "title": "美食評論家",
+      "boss": true,
+      "requirements": [
+        { "itemId": "special_pizza_secret", "count": 1 },
+        { "itemId": "special_sushi_platter", "count": 1 },
+        { "itemId": "special_croissant_herb", "count": 1 },
+        { "itemId": "sushi_e", "count": 2 }
+      ],
+      "reward": 1500,
+      "rewardEnergy": 30,
+      "rewardShard": 1,
+      "unlocks": []
+    },
+    {
+      "id": "s21",
+      "title": "羅馬競技場",
+      "requirements": [
+        { "itemId": "pizza_e", "count": 2 },
+        { "itemId": "special_sushi_salted", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 }
+      ],
+      "reward": 700,
+      "rewardEnergy": 20,
+      "unlocks": []
+    },
+    {
+      "id": "s22",
+      "title": "東京鐵塔",
+      "requirements": [
+        { "itemId": "sushi_e", "count": 2 },
+        { "itemId": "special_pizza_spiced", "count": 1 },
+        { "itemId": "special_croissant_salted", "count": 1 }
+      ],
+      "reward": 760,
+      "rewardEnergy": 20,
+      "unlocks": []
+    },
+    {
+      "id": "s23",
+      "title": "凡爾賽宮宴",
+      "requirements": [
+        { "itemId": "croissant_e", "count": 2 },
+        { "itemId": "special_pizza_secret", "count": 1 },
+        { "itemId": "sushi_d", "count": 1 }
+      ],
+      "reward": 820,
+      "rewardEnergy": 21,
+      "unlocks": []
+    },
+    {
+      "id": "s24",
+      "title": "托斯卡尼莊園",
+      "requirements": [
+        { "itemId": "special_pizza_secret", "count": 2 },
+        { "itemId": "special_croissant_herb", "count": 1 },
+        { "itemId": "sushi_e", "count": 1 }
+      ],
+      "reward": 900,
+      "rewardEnergy": 22,
+      "unlocks": []
+    },
+    {
+      "id": "s25",
+      "title": "富士山腳",
+      "requirements": [
+        { "itemId": "special_sushi_platter", "count": 2 },
+        { "itemId": "pizza_e", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 }
+      ],
+      "reward": 980,
+      "rewardEnergy": 22,
+      "unlocks": []
+    },
+    {
+      "id": "s26",
+      "title": "塞納河遊船",
+      "requirements": [
+        { "itemId": "special_croissant_herb", "count": 2 },
+        { "itemId": "special_sushi_salted", "count": 1 },
+        { "itemId": "pizza_e", "count": 1 }
+      ],
+      "reward": 1060,
+      "rewardEnergy": 23,
+      "unlocks": []
+    },
+    {
+      "id": "s27",
+      "title": "阿瑪菲海岸",
+      "requirements": [
+        { "itemId": "pizza_e", "count": 2 },
+        { "itemId": "sushi_e", "count": 1 },
+        { "itemId": "croissant_e", "count": 1 },
+        { "itemId": "special_pizza_spiced", "count": 1 }
+      ],
+      "reward": 1150,
+      "rewardEnergy": 24,
+      "unlocks": []
+    },
+    {
+      "id": "s28",
+      "title": "銀座名店",
+      "requirements": [
+        { "itemId": "sushi_e", "count": 2 },
+        { "itemId": "special_sushi_platter", "count": 1 },
+        { "itemId": "special_pizza_secret", "count": 1 }
+      ],
+      "reward": 1250,
+      "rewardEnergy": 24,
+      "unlocks": []
+    },
+    {
+      "id": "s29",
+      "title": "巴黎鐵塔夜宴",
+      "requirements": [
+        { "itemId": "croissant_e", "count": 2 },
+        { "itemId": "special_croissant_herb", "count": 1 },
+        { "itemId": "special_sushi_platter", "count": 1 }
+      ],
+      "reward": 1350,
+      "rewardEnergy": 25,
+      "unlocks": []
+    },
+    {
+      "id": "s30",
+      "title": "世界料理大賽",
+      "boss": true,
+      "requirements": [
+        { "itemId": "pizza_e", "count": 2 },
+        { "itemId": "sushi_e", "count": 2 },
+        { "itemId": "croissant_e", "count": 2 },
+        { "itemId": "special_pizza_secret", "count": 1 },
+        { "itemId": "special_sushi_platter", "count": 1 }
+      ],
+      "reward": 3000,
+      "rewardEnergy": 40,
+      "rewardShard": 1,
       "unlocks": []
     }
   ]

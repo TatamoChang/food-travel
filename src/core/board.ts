@@ -1,7 +1,8 @@
-import { mergeResult } from "./registry";
+import { dailyOnly, mergeResult, type RecipeFilter } from "./registry";
 
+/** Normal grid only; the row above it holds the prep station and spice rack (see Game). */
 export const COLS = 6;
-export const ROWS = 8;
+export const ROWS = 7;
 
 export type Cell = string | null;
 
@@ -68,8 +69,8 @@ export class Board {
     return true;
   }
 
-  /** Drag item from `from` onto `to`: merge when allowed, otherwise move into empty cell or swap. */
-  move(from: number, to: number): MoveResult {
+  /** Drag item from `from` onto `to`: merge when allowed (special recipes only if `canUse` says so), otherwise move into empty cell or swap. */
+  move(from: number, to: number, canUse: RecipeFilter = dailyOnly): MoveResult {
     const a = this.cells[from];
     if (from === to || a == null || to < 0 || to >= this.cells.length) return { type: "invalid" };
     const b = this.cells[to];
@@ -78,7 +79,7 @@ export class Board {
       this.cells[from] = null;
       return { type: "moved" };
     }
-    const merged = mergeResult(a, b);
+    const merged = mergeResult(a, b, canUse);
     if (merged) {
       this.cells[to] = merged;
       this.cells[from] = null;

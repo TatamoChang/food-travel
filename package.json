@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.22.0"

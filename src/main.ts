@@ -2,6 +2,7 @@ import { Application } from "pixi.js";
 import { Game } from "./core/game";
 import { loadState, saveState } from "./core/persistence";
 import { GameView } from "./render/GameView";
+import { loadIcons } from "./render/icons";
 
 async function boot() {
   const host = document.getElementById("app")!;
@@ -14,6 +15,7 @@ async function boot() {
     autoDensity: true,
   });
   host.appendChild(app.canvas);
+  await loadIcons();
 
   const game = new Game(loadState());
   const save = () => saveState(game.snapshot());

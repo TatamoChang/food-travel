@@ -1,11 +1,11 @@
-import type { GameState } from "./game";
+import type { GameState, SavedState } from "./game";
 
 const KEY = "food_travel_save_v2";
 
-export function loadState(): GameState | undefined {
+export function loadState(): SavedState | undefined {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as GameState) : undefined;
+    return raw ? (JSON.parse(raw) as SavedState) : undefined;
   } catch {
     return undefined;
   }
