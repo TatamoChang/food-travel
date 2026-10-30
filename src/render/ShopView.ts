@@ -1,6 +1,6 @@
 import { Graphics, type Text } from "pixi.js";
 import type { Game } from "../core/game";
-import { describeEffect, getProduct, products } from "../core/shop";
+import { describeEffect, products } from "../core/shop";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
 import { makeText } from "./ui";
 
@@ -45,7 +45,7 @@ export class ShopView extends ScrollPanel {
         list.addChild(new Graphics().roundRect(PANEL_X + 12, y, PANEL_W - 24, ROW_H - 6, 10).fill(0x3d3028));
         list.addChild(makeText(p.name, PANEL_X + 24, y + 8, 15));
         const missing = this.game.missingRequirement(p.id);
-        const base = missing ? `需先購買「${getProduct(missing)!.name}」` : describeEffect(p.effect);
+        const base = missing ? `需先${missing}` : describeEffect(p.effect);
         const desc = makeText(base, PANEL_X + 24, y + 32, 12, missing ? 0xe8a05f : 0x9fc3e8);
         list.addChild(desc);
         if (p.effect.type === "maxEnergyBoost") this.countdowns.set(p.id, { text: desc, base });

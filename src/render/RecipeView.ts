@@ -3,7 +3,7 @@ import type { Game } from "../core/game";
 import { TIER_REWARD_MULT } from "../core/orders";
 import { chains, getItem, recipes, seasonings, type RecipeTier } from "../core/registry";
 import { products } from "../core/shop";
-import { SHARDS_NEEDED, SHARD_RECIPE, taskForRecipe, taskProgress } from "../core/tasks";
+import { SHARDS_NEEDED, SHARD_RECIPE, describeTask, taskForRecipe, taskProgress, tasks } from "../core/tasks";
 import type { RecipeDef } from "../core/types";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
 import { iconSprite } from "./icons";
@@ -90,6 +90,22 @@ export class RecipeView extends ScrollPanel {
         y += this.recipeRow(list, y, r, color, unlocked ? `已解鎖・訂單獎勵 ×${TIER_REWARD_MULT[tier]}` : this.howToUnlock(r), unlocked);
       }
     }
+    // Tasks that reward something other than a recipe (e.g. a prep station slot).
+    const other = tasks.filter((t) => !t.rewardRecipe);
+    if (other.length > 0) {
+      y += this.section(list, y, "🛠 其他任務");
+      for (const t of other) {
+        const p = taskProgress(t, this.game);
+        const done = p.have >= p.need;
+        list.addChild(new Graphics().roundRect(PANEL_X + 12, y, PANEL_W - 24, 46, 8).fill(0x3d3028));
+        const icon = t.goal.type === "make" ? iconSprite(t.goal.itemId, PANEL_X + 18, y + 7, 32) : null;
+        if (icon) list.addChild(icon);
+        const reward = t.rewardPrepSlot ? "獎勵：料理台 +1 格" : "";
+        list.addChild(makeText(describeTask(t, this.game), PANEL_X + 56, y + 6, 12, done ? 0x8fe388 : 0xffffff, PANEL_W - 80));
+        list.addChild(makeText(done ? `已完成・${reward}` : reward, PANEL_X + 56, y + 26, 11, done ? 0x8fe388 : 0xe8a05f));
+        y += 52;
+      }
+    }
     return y - top;
   }
 
@@ -100,11 +116,7 @@ export class RecipeView extends ScrollPanel {
   private howToUnlock(r: RecipeDef): string {
     const g = this.game;
     const task = taskForRecipe(r.result.id);
-    if (task) {
-      const p = taskProgress(task, g);
-      const what = task.goal.type === "make" ? `製作${getItem(task.goal.itemId)!.name}` : "交付隨機訂單";
-      return `任務「${task.name}」：${what} ${p.have}/${p.need}`;
-    }
+    if (task) return describeTask(task, g);
     if (r.result.id === SHARD_RECIPE) return `Boss 關碎片 ${Math.min(g.shards, SHARDS_NEEDED)}/${SHARDS_NEEDED}`;
     const product = products.find((p) => p.effect.type === "unlockRecipe" && p.effect.recipe === r.result.id);
     if (product) return `商店購買 🪙${product.cost}`;

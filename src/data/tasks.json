@@ -5,7 +5,8 @@
     { "id": "t_pastry", "name": "酥皮職人", "goal": { "type": "make", "itemId": "croissant_b", "count": 5 }, "rewardRecipe": "special_pastry_salted" },
     { "id": "t_spice", "name": "調香師", "goal": { "type": "make", "itemId": "spice_2", "count": 3 }, "rewardRecipe": "special_onigiri_spiced" },
     { "id": "t_orders_30", "name": "人氣名店", "goal": { "type": "deliverRandom", "count": 30 }, "rewardRecipe": "special_sushi_seared" },
-    { "id": "t_pizza_master", "name": "披薩大師", "goal": { "type": "make", "itemId": "pizza_e", "count": 3 }, "rewardRecipe": "special_pizza_truffle" }
+    { "id": "t_pizza_master", "name": "披薩大師", "goal": { "type": "make", "itemId": "pizza_e", "count": 3 }, "rewardRecipe": "special_pizza_truffle" },
+    { "id": "t_sushi_boat", "name": "壽司船長", "goal": { "type": "make", "itemId": "sushi_e", "count": 5 }, "rewardPrepSlot": true }
   ],
   "shardRecipe": "special_sushi_emperor",
   "shardsNeeded": 3

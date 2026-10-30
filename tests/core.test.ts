@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Board, COLS, ROWS } from "../src/core/board";
 import { Energy } from "../src/core/energy";
-import { Game, STATION_SLOTS, newState, prepSlotUnlockStage, type SavedState } from "../src/core/game";
+import { Game, STATION_SLOTS, newState, prepSlotSource, type SavedState } from "../src/core/game";
 import { SHARDS_NEEDED, tasks } from "../src/core/tasks";
 import { SPECIAL_ORDER_FROM_STAGE, TIER_REWARD_MULT, generateRandomOrder, itemReward, story, tierCap } from "../src/core/orders";
 import { getAnyChain, getItem, recipeFor, recipes } from "../src/core/registry";
@@ -47,10 +47,15 @@ describe("30-stage story", () => {
     expect(SHARDS_NEEDED).toBe(3);
   });
 
-  it("opens prep slots 2 and 3 after stages 1 and 11", () => {
-    expect(prepSlotUnlockStage(1)).toBe(1);
-    expect(prepSlotUnlockStage(2)).toBe(11);
+  it("prep slots 2-3 open by stages 1 and 11, slot 4 by a task, slot 5 in the shop", () => {
     expect(STATION_SLOTS).toEqual({ prep: 5, spice: 1 });
+    expect(prepSlotSource(0)).toBeNull();
+    expect(prepSlotSource(1)).toEqual({ kind: "stage", stage: 1 });
+    expect(prepSlotSource(2)).toEqual({ kind: "stage", stage: 11 });
+    const four = prepSlotSource(3);
+    expect(four?.kind === "task" && four.task.goal).toEqual({ type: "make", itemId: "sushi_e", count: 5 });
+    const five = prepSlotSource(4);
+    expect(five?.kind === "shop" && five.product.cost).toBe(3000);
   });
 });
 
@@ -629,5 +634,59 @@ describe("Daily special dishes in random orders", () => {
       }, 0);
       expect(o.reward).toBe(expected);
     }
+  });
+});
+
+describe("Prep slots 4 and 5", () => {
+  const game = (edit?: (s: ReturnType<typeof newState>) => void) => {
+    const s = newState(0);
+    edit?.(s);
+    return new Game(s, () => 0, mulberry32(1));
+  };
+
+  it("slot 4 opens once 5 luxury sushi boats are made, with one notice", () => {
+    const g = game((s) => {
+      s.stageIndex = 11; // stages 1 and 11 done: 3 slots
+      s.made = { sushi_e: 4 };
+    });
+    expect(g.slotsOpen.prep).toBe(3);
+    g.board.cells[0] = "sushi_d";
+    g.board.cells[1] = "sushi_d";
+    g.move(0, 1);
+    expect(g.slotsOpen.prep).toBe(4);
+    expect(g.doneTasks).toContain("t_sushi_boat");
+    expect(g.notices.filter((n) => n.includes("料理台第 4 格"))).toHaveLength(1);
+    g.board.cells[0] = "sushi_d";
+    g.board.cells[2] = "sushi_d";
+    g.move(0, 2);
+    expect(g.notices.filter((n) => n.includes("料理台第 4 格"))).toHaveLength(1);
+  });
+
+  it("slot 5 can only be bought for 3000 after the slot 4 task", () => {
+    const g = game((s) => (s.coins = 5000));
+    expect(g.missingRequirement("prep_slot_5")).toBe("完成任務「壽司船長」");
+    expect(g.buy("prep_slot_5")).toEqual({ ok: false, reason: "requires-other" });
+    g.made.sushi_e = 5;
+    g.board.cells[0] = "pizza_a";
+    g.board.cells[1] = "pizza_a";
+    g.move(0, 1); // any merge re-checks tasks
+    expect(g.missingRequirement("prep_slot_5")).toBeNull();
+    expect(g.buy("prep_slot_5")).toEqual({ ok: true });
+    expect(g.coins).toBe(2000);
+    expect(g.slotsOpen.prep).toBe(3); // first slot + task + purchase (stages 1/11 not done)
+    // the remaining locked slots now wait for stages 1 and 11
+    expect(g.lockedSlotSource(3)).toEqual({ kind: "stage", stage: 1 });
+    expect(g.lockedSlotSource(4)).toEqual({ kind: "stage", stage: 11 });
+    expect(g.lockedSlotSource(2)).toBeNull();
+    expect(g.buy("prep_slot_5")).toEqual({ ok: false, reason: "already-purchased" });
+  });
+
+  it("all five slots open at the end", () => {
+    const g = game((s) => {
+      s.stageIndex = 30;
+      s.made = { sushi_e: 5 };
+      s.purchased = ["prep_slot_5"];
+    });
+    expect(g.slotsOpen.prep).toBe(5);
   });
 });

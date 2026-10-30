@@ -10,7 +10,9 @@ export type ProductEffect =
   /** Raises the energy cap for a while; buying again while active extends the time. */
   | { type: "maxEnergyBoost"; amount: number; durationMinutes: number }
   /** Unlocks a special recipe (by result item id). */
-  | { type: "unlockRecipe"; recipe: string };
+  | { type: "unlockRecipe"; recipe: string }
+  /** Opens one more prep station slot. */
+  | { type: "openPrepSlot" };
 
 export interface Product {
   id: string;
@@ -21,6 +23,8 @@ export interface Product {
   once?: boolean;
   /** Id of a product that must be bought first. */
   requires?: string;
+  /** Id of a task that must be completed first. */
+  requiresTask?: string;
   effect: ProductEffect;
 }
 
@@ -46,5 +50,7 @@ export function describeEffect(effect: ProductEffect): string {
       return `🔋 電力上限 +${effect.amount}，${formatDuration(effect.durationMinutes)}`;
     case "unlockRecipe":
       return `📖 解鎖食譜「${getItem(effect.recipe)?.name ?? effect.recipe}」`;
+    case "openPrepSlot":
+      return "🔓 料理台開放 1 格";
   }
 }

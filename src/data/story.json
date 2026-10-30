@@ -247,7 +247,6 @@
       ],
       "reward": 700,
       "rewardEnergy": 20,
-      "opensPrepSlot": true,
       "unlocks": []
     },
     {
@@ -345,7 +344,6 @@
       ],
       "reward": 1350,
       "rewardEnergy": 25,
-      "opensPrepSlot": true,
       "unlocks": []
     },
     {

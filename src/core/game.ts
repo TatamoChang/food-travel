@@ -8,9 +8,9 @@ import {
   type Requirement,
   type StoryStage,
 } from "./orders";
-import { getProduct, type ProductEffect } from "./shop";
+import { getProduct, products, type Product, type ProductEffect } from "./shop";
 import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, stationOf } from "./registry";
-import { SHARDS_NEEDED, SHARD_RECIPE, taskProgress, tasks } from "./tasks";
+import { SHARDS_NEEDED, SHARD_RECIPE, getTask, taskProgress, tasks, type TaskDef } from "./tasks";
 import { mulberry32, type Rng } from "./rng";
 import type { MoveResult } from "./board";
 import type { StationId } from "./types";
@@ -58,23 +58,36 @@ export interface GameState {
   randomDelivered: number;
   /** Boss-stage recipe shards collected. */
   shards: number;
+  /** Ids of completed tasks (their reward has been given). */
+  doneTasks: string[];
 }
 
 /** What may come out of localStorage: current saves, or older ones that lack newer fields. */
 export type SavedState = Omit<
   GameState,
-  "maxEnergyBonus" | "purchased" | "boosts" | "stations" | "warehouse" | "unlockedRecipes" | "made" | "randomDelivered" | "shards"
+  "maxEnergyBonus" | "purchased" | "boosts" | "stations" | "warehouse" | "unlockedRecipes" | "made" | "randomDelivered" | "shards" | "doneTasks"
 > &
   Partial<GameState> & {
     /** v1 field: generators waiting for a free board cell. */
     pendingGenerators?: string[];
   };
 
-/** 1-based story stage whose completion opens prep slot `slot` (0-based), or null when it never opens. */
-export function prepSlotUnlockStage(slot: number): number | null {
-  if (slot === 0) return null;
-  const stages = story.stages.flatMap((s, i) => (s.opensPrepSlot ? [i + 1] : []));
-  return stages[slot - 1] ?? null;
+/** How a prep slot opens: clearing a stage (1-based), completing a task, or buying a product. */
+export type SlotSource = { kind: "stage"; stage: number } | { kind: "task"; task: TaskDef } | { kind: "shop"; product: Product };
+
+/**
+ * Sources of prep slots 2..5 in the order they open (slot 0 is always open): stages marked
+ * opensPrepSlot, then tasks with rewardPrepSlot, then openPrepSlot products (which require that task).
+ */
+export const PREP_SLOT_SOURCES: readonly SlotSource[] = [
+  ...story.stages.flatMap((s, i): SlotSource[] => (s.opensPrepSlot ? [{ kind: "stage", stage: i + 1 }] : [])),
+  ...tasks.filter((t) => t.rewardPrepSlot).map((task): SlotSource => ({ kind: "task", task })),
+  ...products.filter((p) => p.effect.type === "openPrepSlot").map((product): SlotSource => ({ kind: "shop", product })),
+];
+
+/** What opens prep slot `slot` (0-based); null for the first slot. */
+export function prepSlotSource(slot: number): SlotSource | null {
+  return PREP_SLOT_SOURCES[slot - 1] ?? null;
 }
 
 export type TapResult =
@@ -111,6 +124,7 @@ export function newState(now: number): GameState {
     made: {},
     randomDelivered: 0,
     shards: 0,
+    doneTasks: [],
   };
 }
 
@@ -127,6 +141,7 @@ export class Game {
   readonly made: Record<string, number>;
   randomDelivered: number;
   shards: number;
+  readonly doneTasks: string[];
   /** Short messages for the player (unlocks etc.); the view shows and clears them. */
   readonly notices: string[] = [];
   private nextOrderId: number;
@@ -157,6 +172,7 @@ export class Game {
     this.made = { ...(s.made ?? {}) };
     this.randomDelivered = s.randomDelivered ?? 0;
     this.shards = s.shards ?? 0;
+    this.doneTasks = [...(s.doneTasks ?? [])];
 
     if (s.board.length === LEGACY_BOARD_CELLS) {
       this.board = new Board(s.board.slice(COLS));
@@ -165,15 +181,27 @@ export class Game {
       this.board = new Board(s.board);
     }
     this.catchUpUnlocks();
-    this.checkRecipeUnlocks();
+    this.checkProgress();
     this.notices.length = 0;
     this.refillRandomOrders();
   }
 
-  /** Open slots per station: prep starts with 1 and gains one per finished stage marked opensPrepSlot; spice has 1. */
+  /** Open slots per station: prep starts with 1 and gains one per source reached (see PREP_SLOT_SOURCES); spice has 1. */
   get slotsOpen(): Record<StationId, number> {
-    const opened = story.stages.slice(0, this.stageIndex).filter((s) => s.opensPrepSlot).length;
+    const opened = PREP_SLOT_SOURCES.filter((src) => this.slotSourceReached(src)).length;
     return { prep: Math.min(STATION_SLOTS.prep, 1 + opened), spice: STATION_SLOTS.spice };
+  }
+
+  /** What will open locked prep slot `slot`: the not-yet-reached sources, in order, fill the locked slots left to right. */
+  lockedSlotSource(slot: number): SlotSource | null {
+    const pending = PREP_SLOT_SOURCES.filter((src) => !this.slotSourceReached(src));
+    return slot < this.slotsOpen.prep ? null : (pending[slot - this.slotsOpen.prep] ?? null);
+  }
+
+  private slotSourceReached(src: SlotSource): boolean {
+    if (src.kind === "stage") return this.stageIndex >= src.stage;
+    if (src.kind === "task") return this.doneTasks.includes(src.task.id);
+    return this.isPurchased(src.product.id);
   }
 
   /** Station contents resized to its slot count; generators that no longer fit go to the warehouse. */
@@ -243,7 +271,7 @@ export class Game {
     const r = this.board.move(from, to, (id) => this.isRecipeUnlocked(id));
     if (r.type === "merged") {
       this.made[r.result] = (this.made[r.result] ?? 0) + 1;
-      this.checkRecipeUnlocks();
+      this.checkProgress();
     }
     return r;
   }
@@ -309,16 +337,18 @@ export class Game {
     for (const r of order.requirements) this.board.take(r.itemId, r.count);
     this.coins += order.reward;
     this.randomDelivered++;
-    this.checkRecipeUnlocks();
+    this.checkProgress();
     this.randomOrders = this.randomOrders.filter((o) => o.id !== orderId);
     this.refillRandomOrders();
     return { ok: true, stageCompleted: false };
   }
 
-  /** Product that must be bought before `productId`, while it has not been; null when nothing blocks it. */
+  /** What must happen before `productId` can be bought ("購買「X」" / "完成任務「Y」"), or null when nothing blocks it. */
   missingRequirement(productId: string): string | null {
-    const req = getProduct(productId)?.requires;
-    return req && !this.isPurchased(req) ? req : null;
+    const p = getProduct(productId);
+    if (p?.requires && !this.isPurchased(p.requires)) return `購買「${getProduct(p.requires)!.name}」`;
+    if (p?.requiresTask && !this.doneTasks.includes(p.requiresTask)) return `完成任務「${getTask(p.requiresTask)!.name}」`;
+    return null;
   }
 
   /** Spend coins on a shop product and apply its effect. */
@@ -354,6 +384,7 @@ export class Game {
       made: { ...this.made },
       randomDelivered: this.randomDelivered,
       shards: this.shards,
+      doneTasks: [...this.doneTasks],
     };
   }
 
@@ -375,6 +406,9 @@ export class Game {
       case "unlockRecipe":
         this.unlockRecipe(effect.recipe);
         break;
+      case "openPrepSlot":
+        this.notices.push(`🔓 料理台第 ${this.slotsOpen.prep} 格開放了`);
+        break;
     }
   }
 
@@ -384,11 +418,14 @@ export class Game {
     this.notices.push(`📖 解鎖食譜「${getItem(resultId)!.name}」`);
   }
 
-  /** Unlock recipes whose task is done, and the shard recipe once enough shards are collected. */
-  private checkRecipeUnlocks() {
+  /** Complete tasks that reached their goal (giving their reward once), and assemble the shard recipe. */
+  private checkProgress() {
     for (const t of tasks) {
       const p = taskProgress(t, this);
-      if (p.have >= p.need) this.unlockRecipe(t.rewardRecipe);
+      if (p.have < p.need || this.doneTasks.includes(t.id)) continue;
+      this.doneTasks.push(t.id);
+      if (t.rewardRecipe) this.unlockRecipe(t.rewardRecipe);
+      if (t.rewardPrepSlot) this.notices.push(`🔓 任務「${t.name}」完成，料理台第 ${this.slotsOpen.prep} 格開放了`);
     }
     if (this.shards >= SHARDS_NEEDED) this.unlockRecipe(SHARD_RECIPE);
   }
@@ -425,7 +462,7 @@ export class Game {
     if (stage.rewardShard) {
       this.shards += stage.rewardShard;
       this.notices.push(`🧩 獲得食譜碎片（${Math.min(this.shards, SHARDS_NEEDED)}/${SHARDS_NEEDED}）`);
-      this.checkRecipeUnlocks();
+      this.checkProgress();
     }
   }
 

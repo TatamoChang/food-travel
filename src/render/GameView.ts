@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Rectangle, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
-import { Game, STATIONS, STATION_SLOTS, prepSlotUnlockStage, type StationId } from "../core/game";
+import { Game, STATIONS, STATION_SLOTS, type StationId } from "../core/game";
 import { story, type Requirement } from "../core/orders";
 import { getItem, itemLabel, recipeFor, type RecipeTier } from "../core/registry";
 import { STATION_NAMES } from "../core/shop";
@@ -9,6 +9,7 @@ import { ShopView } from "./ShopView";
 import { RecipeView } from "./RecipeView";
 import { WarehouseView } from "./WarehouseView";
 import { iconSprite } from "./icons";
+import { prepSlotHint } from "./slotHint";
 import { addButton, makeText, type Rect } from "./ui";
 
 const CELL = 56;
@@ -144,20 +145,21 @@ export class GameView {
     this.updateHud();
   }
 
-  /** Requirement lines: "B 披薩餅皮" over "have/need", green when the board covers it. */
+  /** Requirement lines: icon, name over "tier have/need", green when the board covers it. */
   private drawRequirements(reqs: readonly Requirement[], x: number, y: number, colW: number, perRow: number, lineH: number) {
     reqs.forEach((r, i) => {
       const info = getItem(r.itemId)!;
       const have = this.game.board.count(r.itemId);
       const col = i % perRow;
       const row = Math.floor(i / perRow);
-      const label = `${itemLabel(r.itemId)} ${info.name}\n${Math.min(have, r.count)}/${r.count}`;
+      // Name on its own line so long special-dish names fit; tier label goes with the count.
+      const label = `${info.name}\n${itemLabel(r.itemId)} ${Math.min(have, r.count)}/${r.count}`;
       const ix = x + col * colW;
       const iy = y + row * lineH;
       const icon = iconSprite(r.itemId, ix, iy + 2, ICON_SMALL);
       if (icon) this.layer.addChild(icon);
       const tx = icon ? ix + ICON_SMALL + 2 : ix;
-      this.layer.addChild(makeText(label, tx, iy, 11, have >= r.count ? 0x8fe388 : 0xffffff, colW - (tx - ix) - 2));
+      this.layer.addChild(makeText(label, tx, iy, 10, have >= r.count ? 0x8fe388 : 0xffffff, colW - (tx - ix) - 2));
     });
   }
 
@@ -232,9 +234,10 @@ export class GameView {
         const r = this.slotRect(station, slot);
         const id = g.stations[station][slot];
         if (slot >= g.slotsOpen[station]) {
-          const at = prepSlotUnlockStage(slot);
-          this.slotHint(r, at ? `🔒\n第${at}關` : "🔒", () => {
-            if (at) g.notices.push(`🔒 通過第 ${at} 關開放這一格`);
+          const hint = prepSlotHint(g, slot);
+          this.slotHint(r, hint.short, () => {
+            if (g.lockedSlotSource(slot)?.kind === "shop") this.shop.open();
+            else g.notices.push(prepSlotHint(g, slot).long);
           });
         } else if (!id) {
           this.slotHint(r, `${STATION_NAMES[station]}\n空`, () => this.warehouse.open());
