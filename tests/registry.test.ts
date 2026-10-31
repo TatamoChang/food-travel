@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chains, generatorOutput, getItem, itemLabel, mergeResult, recipes, seasonings, stageLabels, stationOf } from "../src/core/registry";
+import { chains, generatorOutput, getItem, itemLabel, mergeResult, recipes, rewardChains, rewardValue, seasonings, stageLabels, stationOf } from "../src/core/registry";
 
 describe("chain data", () => {
   it("has 3 dishes, each with 5 stages", () => {
@@ -81,5 +81,22 @@ describe("seasonings and recipes", () => {
     }
     expect(mergeResult("spice_2", "pizza_d")).toBeNull();
     expect(mergeResult("salt_2", "sushi_c")).toBe("special_sushi_salted");
+  });
+});
+
+describe("merge drops (coins and energy)", () => {
+  it("have 3 grades that merge up, each worth a bit more than two of the grade below", () => {
+    expect(rewardChains.map((c) => c.id)).toEqual(["coin", "energy"]);
+    expect(rewardChains[0].values).toEqual([10, 25, 60]);
+    expect(rewardChains[1].values).toEqual([2, 5, 12]);
+    for (const c of rewardChains) {
+      expect(mergeResult(c.stages[0].id, c.stages[0].id)).toBe(c.stages[1].id);
+      expect(mergeResult(c.stages[1].id, c.stages[1].id)).toBe(c.stages[2].id);
+      expect(mergeResult(c.stages[2].id, c.stages[2].id)).toBeNull();
+      for (let i = 1; i < 3; i++) expect(c.values[i]).toBeGreaterThan(2 * c.values[i - 1]);
+      expect(itemLabel(c.stages[1].id)).toBe("2等");
+      expect(rewardValue(c.stages[2].id)).toEqual({ kind: c.id, amount: c.values[2] });
+    }
+    expect(rewardValue("pizza_a")).toBeNull();
   });
 });

@@ -709,3 +709,86 @@ describe("Prep slots 4 and 5", () => {
     expect(g.slotsOpen.prep).toBe(5);
   });
 });
+
+describe("Merge drops", () => {
+  /** rng 0 always passes a chance roll, 0.99 never does. */
+  const game = (roll: number, edit?: (s: ReturnType<typeof newState>) => void) => {
+    const s = newState(0);
+    s.unlocked = ["pizza", "sushi", "croissant", "salt", "spice"];
+    edit?.(s);
+    return new Game(s, () => 0, () => roll);
+  };
+  const merge = (g: Game, item: string) => {
+    g.board.cells[20] = item;
+    g.board.cells[21] = item;
+    return g.move(20, 21);
+  };
+
+  it("merging into C or higher can drop a coin and energy next to the result", () => {
+    const g = game(0);
+    expect(merge(g, "pizza_b")).toEqual({ type: "merged", result: "pizza_c" });
+    expect(g.board.count("coin_1")).toBe(1);
+    expect(g.board.count("energy_1")).toBe(1);
+    // drops land in the cells closest to the merged item
+    expect([20, 22, 15, 27]).toContain(g.board.cells.indexOf("coin_1"));
+  });
+
+  it("merging into B can only drop energy; seasonings and drops themselves drop nothing", () => {
+    const g = game(0);
+    merge(g, "sushi_a");
+    expect(g.board.count("coin_1")).toBe(0);
+    expect(g.board.count("energy_1")).toBe(1);
+    const g2 = game(0);
+    merge(g2, "salt_1");
+    merge(g2, "coin_1");
+    expect(g2.board.cells.filter((c) => c === "energy_1" || c === "coin_1")).toHaveLength(0);
+    expect(g2.board.count("coin_2")).toBe(1);
+  });
+
+  it("drops nothing when the roll fails or the board is full", () => {
+    const g = game(0.99);
+    merge(g, "pizza_d");
+    expect(g.board.count("coin_1") + g.board.count("energy_1")).toBe(0);
+    // the merge frees the dragged-from cell: the coin takes it and the energy has nowhere to go
+    const full = game(0, (s) => (s.board = new Array(COLS * ROWS).fill("croissant_e")));
+    expect(merge(full, "pizza_c").type).toBe("merged");
+    expect(full.board.cells[20]).toBe("coin_1");
+    expect(full.board.count("energy_1")).toBe(0);
+    expect(full.board.cells.includes(null)).toBe(false);
+  });
+
+  it("chances are 10% / 5% and rise 5 points per boss cleared", () => {
+    expect(game(0).dropChances).toEqual({ coin: 0.1, energy: 0.05 });
+    const after = (stageIndex: number) => game(0, (s) => (s.stageIndex = stageIndex));
+    expect(after(10).bossesCleared).toBe(1);
+    expect(after(10).dropChances.coin).toBeCloseTo(0.15);
+    expect(after(19).dropChances.energy).toBeCloseTo(0.1);
+    expect(after(30).dropChances.coin).toBeCloseTo(0.25);
+    expect(after(30).dropChances.energy).toBeCloseTo(0.2);
+    // a roll of 0.12 misses a 10% chance but hits 15%
+    const s = newState(0);
+    s.stageIndex = 10;
+    const g = new Game(s, () => 0, () => 0.12);
+    merge(g, "pizza_b");
+    expect(g.board.count("coin_1")).toBe(1);
+    expect(g.board.count("energy_1")).toBe(0);
+  });
+
+  it("tapping a drop collects it; other items are not collected", () => {
+    const g = game(0.99, (s) => {
+      s.coins = 0;
+      s.energy.value = 3;
+      s.board[0] = "coin_3";
+      s.board[1] = "energy_2";
+      s.board[2] = "pizza_a";
+    });
+    expect(g.collect(0)).toEqual({ kind: "coin", amount: 60 });
+    expect(g.coins).toBe(60);
+    expect(g.board.cells[0]).toBeNull();
+    expect(g.collect(1)).toEqual({ kind: "energy", amount: 5 });
+    expect(g.energy.value).toBe(8);
+    expect(g.collect(2)).toBeNull();
+    expect(g.board.cells[2]).toBe("pizza_a");
+    expect(g.collect(3)).toBeNull();
+  });
+});

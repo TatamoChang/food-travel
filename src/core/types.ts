@@ -19,12 +19,22 @@ export interface ChainDef {
   stages: StageDef[];
 }
 
+/** Coins or energy dropped by merges: 3 grades that merge like seasonings; tap one to collect `values[grade]`. */
+export interface RewardChainDef {
+  id: "coin" | "energy";
+  name: string;
+  /** Amount collected per grade. */
+  values: number[];
+  stages: StageDef[];
+}
+
 export interface ChainsFile {
   stageLabels: string[];
   /** Dishes, 5 stages (A..E) each; their generators sit on the prep station. */
   chains: ChainDef[];
   /** Seasonings, 3 grades each; their generators sit on the spice rack. */
   seasonings: ChainDef[];
+  rewards: RewardChainDef[];
 }
 
 /** daily: usable once its chains are unlocked. green/orange/red: special recipes that must be unlocked first. */
@@ -54,7 +64,7 @@ export interface ItemInfo {
   /** Dish or seasoning chain id; for special dishes, the dish chain they came from. */
   chainId: string;
   kind: "stage" | "generator" | "special";
-  category: "dish" | "seasoning";
+  category: "dish" | "seasoning" | "reward";
   /** 0-based stage index; -1 for generators; for special dishes, the stage of the dish they were made from. */
   stageIndex: number;
 }

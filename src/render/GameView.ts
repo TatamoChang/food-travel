@@ -40,6 +40,8 @@ const CHAIN_COLORS: Record<string, number> = {
   croissant: 0xe07a5f,
   salt: 0xc9d3dd,
   spice: 0x9a6b3f,
+  coin: 0xf2c230,
+  energy: 0x5cc8f0,
 };
 
 const STATION_COLORS: Record<StationId, number> = { prep: 0x6b5235, spice: 0x4f6138 };
@@ -389,6 +391,10 @@ export class GameView {
     if (d.moved) {
       const to = this.cellAt(p.x, p.y);
       if (to !== null) g.move(d.from, to);
+    } else {
+      // A tap on a dropped coin or energy item collects it.
+      const got = g.collect(d.from);
+      if (got) this.notify({ text: got.kind === "coin" ? `🪙 +${got.amount}` : `⚡ +${got.amount}` });
     }
     this.render();
     this.onChange();

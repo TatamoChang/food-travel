@@ -23,6 +23,7 @@
 - **新增商品前，先把商品名稱、效果、價格列給使用者確認，再動手改。** 使用者明確要求過這個流程。
 - 頂排：料理台 5 格（放料理產出器）＋調味區 1 格（放調味產出器，不上鎖）。料理台第 2、3 格在第 1、11 關過關時開放，第 4 格由任務「壽司船長」（製作 5 個豪華壽司船）開放，第 5 格為商店商品「料理台第 5 格」🪙3000（限 1 次、需先完成該任務）。
 - 劇情共 30 關，每 9 個普通關接 1 個 Boss 關（第 10、20、30 關），Boss 關給 1 個食譜碎片。
+- 合成掉落：合成出 C 以上的料理有機率在旁邊掉 1 等金幣，合成出 B 以上的料理有機率掉 1 等電力（電力機率較低）；兩種都分 3 等、兩個同等合成升一等，點一下領取。每過一個 Boss 關兩種機率各 +5%。棋盤沒空格就不掉落。
 - 食譜：日常食譜（合成路線＋調味料理）隨過關解鎖、可查詢；特別食譜分綠（任務解鎖，5 個）、橘（1 個高等任務、1 個商店 🪙800，共 2 個）、紅（3 個 Boss 碎片組合，1 個）。任務有「製作指定料理 N 個」（棋盤合成）和「累計交付隨機訂單 N 張」兩種。
 
 ## 指令
@@ -45,15 +46,15 @@ VS Code 已有 `.vscode/launch.json`（F5 可除錯遊戲與測試）。
 ```
 src/
   data/            資料驅動的內容，改這裡就能調整遊戲
-    chains.json    chains：三種料理、各 5 階、產出器；seasonings：鹽、香料，各 3 等、產出器
+    chains.json    chains：三種料理、各 5 階、產出器；seasonings：鹽、香料，各 3 等、產出器；rewards：金幣、電力掉落物各 3 等與面額
     recipes.json   配方（調味料 + 料理 → 特製料理），tier: daily/green/orange/red
     tasks.json     任務（解鎖綠/橘食譜）、碎片食譜與所需碎片數
     story.json     30 關：需求、金幣、電力(rewardEnergy)、解鎖(料理或調味料 id)、boss、rewardShard、opensPrepSlot
     shop.json      商店商品（requires = 需先購買的商品 id）
   assets/icons/    每個物品一個 SVG，檔名 = 物品 id（由 scripts/gen-icons.mjs 產生，勿手改）
   core/
-    registry.ts    物品查詢、mergeResult()（含配方）、generatorOutput()、itemLabel()、stationOf()
-    types.ts       資料型別、ItemInfo（kind: stage/generator/special；category: dish/seasoning）
+    registry.ts    物品查詢、mergeResult()（含配方）、generatorOutput()、itemLabel()、stationOf()、rewardValue()
+    types.ts       資料型別、ItemInfo（kind: stage/generator/special；category: dish/seasoning/reward）
     board.ts       6x7 一般格：move（移動/交換/合成）、spawnNear、count、take
     energy.ts      電力：回復、spend、add（可超過上限）、setMax
     orders.ts      劇情型別、隨機訂單生成 generateRandomOrder（含特製料理）、tierCap、itemReward、TIER_REWARD_MULT
@@ -92,6 +93,7 @@ tests/             registry.test.ts、core.test.ts
 
 - 畫面 6x8：最上排為料理台（左 5）與調味區（右 1）（`STATION_SLOTS`）；一般格 6x7。料理台開局 1 格，開放來源依序列在 `PREP_SLOT_SOURCES`：`story.json` 中 `opensPrepSlot` 的關卡（1、11）、`tasks.json` 中 `rewardPrepSlot` 的任務、`openPrepSlot` 商品。`Game.slotsOpen` 由進度推算（不存檔），鎖住的格子依序顯示「尚未達成」的來源（`lockedSlotSource`）。產出器點一次耗 1 電力，產出該鏈第 1 階，放在同欄下方最近的空格。
 - 劇情第 2 關完成解鎖鹽罐，第 3 關完成解鎖香料罐。
+- 合成掉落（`game.ts`）：結果為料理（含特製料理）且階數 ≥ C（`COIN_DROP_MIN_STAGE`）時 10%（`COIN_DROP_CHANCE`）掉 `coin_1`；階數 ≥ B（`ENERGY_DROP_MIN_STAGE`）時 5%（`ENERGY_DROP_CHANCE`）掉 `energy_1`；兩者獨立擲骰、可同時掉。每過一個 Boss 關各 +5 個百分點（`DROP_BOSS_BONUS`，`bossesCleared`），3 個 Boss 後為 25%／20%。金幣 1/2/3 等 = 10/25/60，電力 1/2/3 等 = 2/5/12（`chains.json` 的 `values`）。
 - 電力基本上限 50（`ENERGY_MAX`），新遊戲開局電力也是 50；每 60 秒回 1（`ENERGY_REGEN_MS`）。
 - 隨機訂單：同時 3 張（`RANDOM_ORDER_SLOTS`）；1 到 2 種物品，每種 1 到 2 個；階數範圍 `[cap-1, cap]`，`cap = min(4, 1 + 劇情關卡索引)`；獎勵每個物品 `3 * 2^階數 * 數量`。
 - 特製料理訂單：每行 30% 機率（`SPECIAL_ORDER_CHANCE`）改為特製料理，只挑料理鏈與調味料鏈都已解鎖、料理階數 ≤ cap、且食譜可用的（日常：劇情索引 ≥ 2 `SPECIAL_ORDER_FROM_STAGE`；特別：已解鎖）；獎勵 `round(3 * 2^料理階數 * 倍數)`，倍數 daily 1.5／綠 2／橘 3／紅 5（`TIER_REWARD_MULT`）。
@@ -111,7 +113,8 @@ tests/             registry.test.ts、core.test.ts
 - `Game.notices` 是給玩家的提示佇列（解鎖食譜、產出器進倉庫、開放格子、碎片），`GameView` 逐則顯示 2.5 秒並移除；不存檔。畫面層的提示（點產出器時棋盤滿、電力不足）由 `GameView.explainTap` 依 `TapResult` 產生，用 `notify()` 排隊：同一個 key 已在顯示或排隊時不重複加入。可帶按鈕的提示（電力不足的「🛒 買電力」開商店）顯示 4 秒，只有帶按鈕的提示會接收點擊。
 - 存檔裡的台子內容若超出目前格數（例如舊開發版 3+3 格），多的產出器移進倉庫。產出器只存在於台上或倉庫，一般格子不會有產出器。
 - 最上排不是拖放目標；台上的產出器用 `pointertap` 觸發，不走拖曳流程。
-- 合成鏈中 E 階、調味料 3 等、特製料理都不能再合成。配方兩個物品順序無關，結果放在被拖到的格子。
+- 掉落物放在合成結果旁最近的空格；合成會空出被拖走的那格，所以棋盤原本全滿時仍可能掉 1 個。點一下（沒拖動）棋盤上的掉落物由 `Game.collect` 領取，電力領取可超過上限。
+- 合成鏈中 E 階、調味料 3 等、掉落物 3 等、特製料理都不能再合成。配方兩個物品順序無關，結果放在被拖到的格子。
 - **舊存檔遷移**（`Game` 建構子，判斷 `board.length === 48`）：舊 6x8 棋盤的最上排拿掉，其餘 42 格成為一般格；所有產出器（最上排、棋盤上、`pendingGenerators`）搬到台上，放不下的進倉庫；最上排的一般物品放到離左上最近的空格，棋盤滿就進倉庫。另外 `catchUpUnlocks()` 會補發「已通過關卡」的解鎖，所以在 `story.json` 給舊關卡加解鎖也會補給舊存檔。存檔 key 維持 `food_travel_save_v2`。
 - 覆蓋層（`ScrollPanel`）捲動拖曳後放開不會觸發按鈕；新的按下會清掉這個狀態。清單用遮罩裁切。
 
@@ -122,7 +125,8 @@ tests/             registry.test.ts、core.test.ts
 ## 已完成
 
 - 料理台、調味區、倉庫、調味料與日常特製料理（舊存檔遷移時棋盤放不下的一般物品暫存倉庫，倉庫面板可「放入」棋盤）。
-- 漫畫風 SVG 圖示（40 個）。
+- 漫畫風 SVG 圖示（46 個）。
+- 合成掉落金幣／電力（3 等、可合成、點擊領取，Boss 後機率提升）。
 - 食譜本（日常／特別）、任務、30 關含 3 個 Boss 關、碎片。
 - 點產出器時棋盤滿／電力不足的提示（電力不足可直接開商店）。
 
