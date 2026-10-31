@@ -89,6 +89,12 @@ function onigiri(rice = RICE, riceSh = RICE_SH) {
 const crown = (x, y, s = 1) => g(`translate(${x} ${y}) scale(${s})`, flat("M-14 6l-4 -16l10 8l8 -12l8 12l10 -8l-4 16z", "#ffd34d", 3) + dot(0, -14, 2.5, "#e0483a"));
 const flame = (x, y, s = 1) => g(`translate(${x} ${y}) scale(${s})`, flat("M0 12q-12 -4 -8 -16q2 6 6 6q-4 -12 6 -20q-2 10 6 14q6 8 -2 14q-4 2 -8 2z", "#ff9a2e", 2.5) + flat("M1 10q-5 -2 -3 -8q3 3 5 2q2 4 -2 6z", "#ffe14d", 1.5));
 
+// ---------- merge drops ----------
+function coinFace(x, y, r) {
+  return cel(ell(x, y, r, r), "#ffd34d", "#e0a82a", { w: Math.max(3, r / 7) }) + flat(ell(x, y, r * 0.62, r * 0.62), "none", Math.max(2, r / 12)) + line(`M${x} ${y - r * 0.35}v${r * 0.7}`, "#b07a1a", Math.max(2, r / 9));
+}
+const bolt = (x, y, s = 1) => g(`translate(${x} ${y}) scale(${s})`, cel("M8 -44l-34 50h24l-10 38l38 -54h-24z", "#ffe14d", "#f2b11c"));
+
 // ---------- croissant ----------
 function croissant(base, shade, x = 0, y = 0, s = 1) {
   const seg = (cx, cy, rx, ry, rot) => g(`rotate(${rot} ${cx} ${cy})`, cel(ell(cx, cy, rx, ry), base, shade, { w: 4.5 }));
@@ -226,6 +232,22 @@ const icons = {
     cel("M6 78h116q-2 14 -12 30h-92q-10 -16 -12 -30z", "#ffd34d", "#d99a1a") + flat("M2 78q-2 -14 10 -20l6 20z", "#ffd34d", 4) + flat("M126 78q2 -14 -10 -20l-6 20z", "#ffd34d", 4) +
     line("M16 92h96", "#d99a1a", 3) + dot(40, 98, 3, "#e0483a") + dot(64, 98, 3, "#3d6fb5") + dot(88, 98, 3, "#e0483a") +
     mini(-4, 34, 0.5) + mini(28, 30, 0.5, ...TUNA) + mini(60, 34, 0.5, ...TAMAGO) + crown(64, 24, 1.1) + sparkle(110, 18) + sparkle(18, 22, 0.7),
+
+  // merge drops: coins and energy (tap to collect)
+  coin_1: () => coinFace(64, 70, 34) + sparkle(100, 30, 0.8),
+  coin_2: () =>
+    cel("M30 66q-8 40 34 44q42 -4 34 -44q-8 -14 -34 -14q-26 0 -34 14z", "#c98a4b", "#9c6531") +
+    flat("M44 54q-4 -18 8 -20l12 8l12 -8q12 2 8 20z", "#c98a4b", 4) + line("M44 54q20 8 40 0", "#5b4a3a", 5) +
+    coinFace(64, 82, 16) + coinFace(40, 40, 12) + hl("M36 76q-2 12 4 20"),
+  coin_3: () =>
+    cel("M16 64h96v42h-96z", "#a8683a", "#7b4a26") + line("M16 78h96", "#5b4a3a", 4) + flat("M58 70h12v14h-12z", "#ffd34d", 3) +
+    flat("M20 64q0 -14 14 -16h60q14 2 14 16z", "#f2c230", 4) +
+    coinFace(40, 48, 12) + coinFace(64, 42, 13) + coinFace(88, 48, 12) + coinFace(52, 32, 10) + coinFace(76, 32, 10) + sparkle(108, 22) + sparkle(20, 30, 0.7),
+  energy_1: () => bolt(64, 66, 1) + sparkle(98, 30, 0.7),
+  energy_2: () =>
+    cel(ell(64, 66, 40, 40), "#7fd8f7", "#3fa6d4") + clipped(ell(64, 66, 40, 40), dot(52, 50, 14, "#b6ecfb")) + line(ell(64, 66, 40, 40), O, 5) + bolt(64, 66, 0.7) + hl("M38 52q4 -10 14 -16"),
+  energy_3: () =>
+    cel("M64 10l34 24v52l-34 30l-34 -30v-52z", "#7fd8f7", "#3fa6d4") + line("M64 10v106M30 34l34 24l34 -24", "#3fa6d4", 3) + bolt(64, 66, 0.7) + hl("M40 40v30") + sparkle(108, 22) + sparkle(18, 92, 0.7),
 };
 
 mkdirSync(OUT, { recursive: true });
