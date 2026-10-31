@@ -24,6 +24,7 @@
 - 頂排：料理台 5 格（放料理產出器）＋調味區 1 格（放調味產出器，不上鎖）。料理台第 2、3 格在第 1、11 關過關時開放，第 4 格由任務「壽司船長」（製作 5 個豪華壽司船）開放，第 5 格為商店商品「料理台第 5 格」🪙3000（限 1 次、需先完成該任務）。
 - 劇情共 30 關，每 9 個普通關接 1 個 Boss 關（第 10、20、30 關），Boss 關給 1 個食譜碎片。
 - 合成掉落：合成出 C 以上的料理有機率在旁邊掉 1 等金幣，合成出 B 以上的料理有機率掉 1 等電力（電力機率較低）；兩種都分 3 等、兩個同等合成升一等，點一下領取。每過一個 Boss 關兩種機率各 +5%。棋盤沒空格就不掉落。
+- 主題：經典（原配色）、台灣台北、美國紐約、法國巴黎，免費、隨時在 HUD「🎨」切換。主題只換外觀（背景插畫＋配色），選擇存在裝置上，不進存檔。
 - 食譜：日常食譜（合成路線＋調味料理）隨過關解鎖、可查詢；特別食譜分綠（任務解鎖，5 個）、橘（1 個高等任務、1 個商店 🪙800，共 2 個）、紅（3 個 Boss 碎片組合，1 個）。任務有「製作指定料理 N 個」（棋盤合成）和「累計交付隨機訂單 N 張」兩種。
 
 ## 指令
@@ -32,7 +33,7 @@
 npm run dev     # http://localhost:5173（port 固定，被占用會直接報錯）
 npm test        # vitest
 npm run build   # tsc --noEmit && vite build
-npm run icons   # 由 scripts/gen-icons.mjs 重新產生 src/assets/icons/*.svg
+npm run icons   # 由 scripts/gen-icons.mjs 重新產生 src/assets/icons/*.svg 與 src/assets/themes/*.svg
 ```
 
 VS Code 已有 `.vscode/launch.json`（F5 可除錯遊戲與測試）。
@@ -52,6 +53,7 @@ src/
     story.json     30 關：需求、金幣、電力(rewardEnergy)、解鎖(料理或調味料 id)、boss、rewardShard、opensPrepSlot
     shop.json      商店商品（requires = 需先購買的商品 id）
   assets/icons/    每個物品一個 SVG，檔名 = 物品 id（由 scripts/gen-icons.mjs 產生，勿手改）
+  assets/themes/   主題背景插畫 360x720 SVG，檔名 = 主題 id（同樣由 gen-icons.mjs 產生）
   core/
     registry.ts    物品查詢、mergeResult()（含配方）、generatorOutput()、itemLabel()、stationOf()、rewardValue()
     types.ts       資料型別、ItemInfo（kind: stage/generator/special；category: dish/seasoning/reward）
@@ -67,16 +69,18 @@ src/
     rng.ts         可設種子的亂數（測試用）
   render/
     layout.ts      虛擬畫面 360x720，會依視窗縮放
-    ui.ts          makeText、addButton 共用元件
-    icons.ts       載入 SVG 圖示（光柵化成 192px 貼圖）、iconSprite()
+    ui.ts          makeText、addButton 共用元件、setButtonColor（主題按鈕色）
+    icons.ts       載入 SVG 圖示（光柵化成 192px 貼圖）與主題背景（2x）、iconSprite()、backdropSprite()
+    themes.ts      主題清單與配色、選擇存取（localStorage key: food_travel_theme）
     GameView.ts    HUD、訂單卡、最上排兩區、棋盤、拖曳與點擊
     Panel.ts       ScrollPanel：覆蓋層共用框架（標題、可拖曳/滾輪捲動的清單、關閉鈕）
     ShopView.ts    商店覆蓋層
     WarehouseView.ts 倉庫覆蓋層（收回、放入）
     RecipeView.ts  食譜覆蓋層（日常／特別兩頁）
+    ThemeView.ts   主題覆蓋層（縮圖、色票、套用）
 scripts/gen-icons.mjs  圖示產生器（共用 cel()、hl()、sparkle() 等規則）
   main.ts          啟動、存檔掛勾（每次動作後、每 10 秒、pagehide）
-tests/             registry.test.ts、core.test.ts
+tests/             registry.test.ts、core.test.ts、themes.test.ts
 ```
 
 ### 新增內容的方式
@@ -86,6 +90,7 @@ tests/             registry.test.ts、core.test.ts
 - 新調味料：在 `chains.json` 的 `seasonings` 加一筆（3 等 + 產出器，產出器自動歸香料架）；補 `CHAIN_COLORS`；在 `story.json` 解鎖。
 - 新特製料理：在 `recipes.json` 加一筆（tier、調味料 id、料理 id、結果 id 與名稱），同一組調味料＋料理只能有一個配方（測試會檢查）。隨機訂單會自動納入。
 - 新特別食譜的取得方式：任務 → `tasks.json` 加一筆（`rewardRecipe`）；商店 → `shop.json` 加 `unlockRecipe` 商品（先給使用者確認）；碎片 → `tasks.json` 的 `shardRecipe`。食譜頁會自動顯示取得方式。
+- 新主題：在 `themes.ts` 的 `THEMES` 加一筆配色，在 `gen-icons.mjs` 的 `backdrops` 加同 id 的背景插畫並跑 `npm run icons`（沒有背景就只用純色 `background`）。
 - 新劇情關卡：在 `story.json` 加一筆。需求只能引用「該關之前已解鎖」的料理（測試會檢查）。
 - 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`game.ts` 的 `applyEffect` 加處理。
 
@@ -117,6 +122,7 @@ tests/             registry.test.ts、core.test.ts
 - 合成鏈中 E 階、調味料 3 等、掉落物 3 等、特製料理都不能再合成。配方兩個物品順序無關，結果放在被拖到的格子。
 - **舊存檔遷移**（`Game` 建構子，判斷 `board.length === 48`）：舊 6x8 棋盤的最上排拿掉，其餘 42 格成為一般格；所有產出器（最上排、棋盤上、`pendingGenerators`）搬到台上，放不下的進倉庫；最上排的一般物品放到離左上最近的空格，棋盤滿就進倉庫。另外 `catchUpUnlocks()` 會補發「已通過關卡」的解鎖，所以在 `story.json` 給舊關卡加解鎖也會補給舊存檔。存檔 key 維持 `food_travel_save_v2`。
 - 覆蓋層（`ScrollPanel`）捲動拖曳後放開不會觸發按鈕；新的按下會清掉這個狀態。清單用遮罩裁切。
+- 主題：`GameView.applyTheme` 換背景 sprite、渲染器底色、`setButtonColor`，再 `render()`；配色只套用在主畫面（卡片、格子、台子外框、按鈕、提示框），覆蓋層面板維持深色。格子用半透明（`cellAlpha`）讓背景插畫透出來。HUD 文字分兩行（電力、金幣）並加描邊，讓 HUD 能放 4 個按鈕。
 
 ## 資料來源與未驗證事項
 
@@ -129,6 +135,7 @@ tests/             registry.test.ts、core.test.ts
 - 合成掉落金幣／電力（3 等、可合成、點擊領取，Boss 後機率提升）。
 - 食譜本（日常／特別）、任務、30 關含 3 個 Boss 關、碎片。
 - 點產出器時棋盤滿／電力不足的提示（電力不足可直接開商店）。
+- 主題切換（經典、台北、紐約、巴黎）。
 
 ## 尚未做 / 待辦
 
@@ -137,7 +144,7 @@ tests/             registry.test.ts、core.test.ts
 1. **實機驗證**：已用 Playwright（headless Chromium，360x720）截圖並模擬拖曳、點擊、商店捲動與購買、倉庫放入，畫面正常、無錯誤；但還沒在真的手機上試過觸控手感。
 2. 調味料目前不會單獨出現在訂單；特製料理的數值與 30% 出現率需實際遊玩後調整。
 3. 動畫與音效（合成、生成、交付）。
-4. 美術：物品與產出器已有圖示；按鈕、背景、訂單卡等 UI 仍是色塊。
+4. 美術：物品、產出器、主題背景已有插畫；按鈕與訂單卡仍是色塊（顏色隨主題）。
 5. 產出器機制：目前只會產 A；可考慮機率產出較高階、產出器冷卻等。
 6. 內容擴充：更多料理、更多劇情關卡、景點場景與解鎖、劇情對話。
 7. 原遊戲有而這裡沒有的：鑽石貨幣、卡冊收集、限時活動、每日獎勵、廣告、好友與社交。

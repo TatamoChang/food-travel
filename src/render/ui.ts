@@ -18,8 +18,15 @@ export function makeText(str: string, x: number, y: number, size: number, fill =
   return t;
 }
 
+/** Fill of enabled buttons; the active theme sets it. */
+let buttonColor = 0x3f9d4f;
+
+export function setButtonColor(color: number) {
+  buttonColor = color;
+}
+
 export function addButton(parent: Container, rect: Rect, label: string, enabled: boolean, onTap: () => void) {
-  const b = new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 8).fill(enabled ? 0x3f9d4f : 0x555049);
+  const b = new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 8).fill(enabled ? buttonColor : 0x555049);
   const t = makeText(label, 0, 0, 13, enabled ? 0xffffff : 0x8a847b);
   t.position.set(rect.x + (rect.w - t.width) / 2, rect.y + (rect.h - t.height) / 2);
   if (enabled) {
