@@ -10,6 +10,7 @@ import { RecipeView } from "./RecipeView";
 import { WarehouseView } from "./WarehouseView";
 import { backdropSprite, iconSprite } from "./icons";
 import { ThemeView } from "./ThemeView";
+import { TutorialView } from "./TutorialView";
 import { getTheme, loadThemeId, saveThemeId, type Theme } from "./themes";
 import { prepSlotHint } from "./slotHint";
 import { addButton, makeText, setButtonColor, type Rect } from "./ui";
@@ -68,6 +69,7 @@ export class GameView {
   private readonly warehouse: WarehouseView;
   private readonly recipes: RecipeView;
   private readonly themes: ThemeView;
+  private readonly tutorial: TutorialView;
   private theme: Theme = getTheme(loadThemeId());
   private readonly toast = new Container();
   private toastUntil = 0;
@@ -82,7 +84,7 @@ export class GameView {
   ) {
     this.root.addChild(this.backdrop, this.layer);
     // Two short lines (energy, coins) leave room for the four HUD buttons.
-    this.hud = makeText("", 12, 3, 13);
+    this.hud = makeText("", 10, 3, 12);
     this.hud.style.stroke = { color: 0x1d1712, width: 3 };
     this.root.addChild(this.hud);
     // Panel actions can change the stations and board, so redraw before saving.
@@ -94,8 +96,9 @@ export class GameView {
     this.warehouse = new WarehouseView(game, changed);
     this.recipes = new RecipeView(game);
     this.themes = new ThemeView((id) => this.applyTheme(id));
+    this.tutorial = new TutorialView(() => this.theme.accent);
     this.toast.eventMode = "none";
-    this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.themes.container, this.toast);
+    this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.themes.container, this.toast, this.tutorial.container);
     app.stage.addChild(this.root);
 
     app.stage.eventMode = "static";
@@ -108,6 +111,7 @@ export class GameView {
 
     this.fit();
     this.applyTheme(this.theme.id);
+    this.tutorial.showUnseen();
   }
 
   /** Switch theme: palette, button colour and backdrop; remembered on this device. */
@@ -254,10 +258,11 @@ export class GameView {
   /** Lives in the rebuilt layer so the warehouse count stays current. */
   private drawHudButtons() {
     const n = this.game.warehouse.length;
-    addButton(this.layer, { x: VIEW_W - 230, y: 6, w: 32, h: 28 }, "🎨", true, () => this.themes.open(this.theme.id));
-    addButton(this.layer, { x: VIEW_W - 194, y: 6, w: 58, h: 28 }, "📖食譜", true, () => this.recipes.open());
-    addButton(this.layer, { x: VIEW_W - 132, y: 6, w: 58, h: 28 }, n > 0 ? `📦倉庫${n}` : "📦倉庫", true, () => this.warehouse.open());
-    addButton(this.layer, { x: VIEW_W - 70, y: 6, w: 58, h: 28 }, "🛒商店", true, () => this.shop.open());
+    addButton(this.layer, { x: VIEW_W - 250, y: 6, w: 30, h: 28 }, "❓", true, () => this.tutorial.replay());
+    addButton(this.layer, { x: VIEW_W - 216, y: 6, w: 30, h: 28 }, "🎨", true, () => this.themes.open(this.theme.id));
+    addButton(this.layer, { x: VIEW_W - 182, y: 6, w: 56, h: 28 }, "📖食譜", true, () => this.recipes.open());
+    addButton(this.layer, { x: VIEW_W - 122, y: 6, w: 56, h: 28 }, n > 0 ? `📦倉庫${n}` : "📦倉庫", true, () => this.warehouse.open());
+    addButton(this.layer, { x: VIEW_W - 62, y: 6, w: 56, h: 28 }, "🛒商店", true, () => this.shop.open());
   }
 
   private drawOrders() {

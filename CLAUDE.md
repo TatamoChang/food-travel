@@ -25,6 +25,7 @@
 - 劇情共 30 關，每 9 個普通關接 1 個 Boss 關（第 10、20、30 關），Boss 關給 1 個食譜碎片。
 - 合成掉落：合成出 C 以上的料理有機率在旁邊掉 1 等金幣，合成出 B 以上的料理有機率掉 1 等電力（電力機率較低）；兩種都分 3 等、兩個同等合成升一等，點一下領取。每過一個 Boss 關兩種機率各 +5%。棋盤沒空格就不掉落。
 - 主題：經典（原配色）、台灣台北、美國紐約、法國巴黎，免費、隨時在 HUD「🎨」切換。主題只換外觀（背景插畫＋配色），選擇存在裝置上，不進存檔。
+- 說明流程：一步步標示畫面區域的教學。第一次使用自動顯示；之後只顯示沒看過的步驟（新增步驟時老玩家只會看到新的）；HUD「❓」可隨時從頭重看。看過哪些步驟記在裝置上，不進存檔。
 - 食譜：日常食譜（合成路線＋調味料理）隨過關解鎖、可查詢；特別食譜分綠（任務解鎖，5 個）、橘（1 個高等任務、1 個商店 🪙800，共 2 個）、紅（3 個 Boss 碎片組合，1 個）。任務有「製作指定料理 N 個」（棋盤合成）和「累計交付隨機訂單 N 張」兩種。
 
 ## 指令
@@ -78,9 +79,11 @@ src/
     WarehouseView.ts 倉庫覆蓋層（收回、放入）
     RecipeView.ts  食譜覆蓋層（日常／特別兩頁）
     ThemeView.ts   主題覆蓋層（縮圖、色票、套用）
+    tutorialSteps.ts 說明步驟（文字、標示區域）、unseenSteps、看過紀錄（localStorage key: food_travel_tutorial_seen）
+    TutorialView.ts  說明覆蓋層（變暗＋挖洞標示、對話框、略過／下一步）
 scripts/gen-icons.mjs  圖示產生器（共用 cel()、hl()、sparkle() 等規則）
   main.ts          啟動、存檔掛勾（每次動作後、每 10 秒、pagehide）
-tests/             registry.test.ts、core.test.ts、themes.test.ts
+tests/             registry.test.ts、core.test.ts、themes.test.ts、tutorial.test.ts
 ```
 
 ### 新增內容的方式
@@ -91,6 +94,7 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts
 - 新特製料理：在 `recipes.json` 加一筆（tier、調味料 id、料理 id、結果 id 與名稱），同一組調味料＋料理只能有一個配方（測試會檢查）。隨機訂單會自動納入。
 - 新特別食譜的取得方式：任務 → `tasks.json` 加一筆（`rewardRecipe`）；商店 → `shop.json` 加 `unlockRecipe` 商品（先給使用者確認）；碎片 → `tasks.json` 的 `shardRecipe`。食譜頁會自動顯示取得方式。
 - 新主題：在 `themes.ts` 的 `THEMES` 加一筆配色，在 `gen-icons.mjs` 的 `backdrops` 加同 id 的背景插畫並跑 `npm run icons`（沒有背景就只用純色 `background`）。
+- 新說明步驟：在 `tutorialSteps.ts` 的 `TUTORIAL_STEPS` 加一筆（新的 `id`，`target` 用 360x720 座標）。已看過其他步驟的玩家下次開啟只會看到這一步。改了畫面配置記得同步更新 `target`。
 - 新劇情關卡：在 `story.json` 加一筆。需求只能引用「該關之前已解鎖」的料理（測試會檢查）。
 - 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`game.ts` 的 `applyEffect` 加處理。
 
@@ -122,7 +126,8 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts
 - 合成鏈中 E 階、調味料 3 等、掉落物 3 等、特製料理都不能再合成。配方兩個物品順序無關，結果放在被拖到的格子。
 - **舊存檔遷移**（`Game` 建構子，判斷 `board.length === 48`）：舊 6x8 棋盤的最上排拿掉，其餘 42 格成為一般格；所有產出器（最上排、棋盤上、`pendingGenerators`）搬到台上，放不下的進倉庫；最上排的一般物品放到離左上最近的空格，棋盤滿就進倉庫。另外 `catchUpUnlocks()` 會補發「已通過關卡」的解鎖，所以在 `story.json` 給舊關卡加解鎖也會補給舊存檔。存檔 key 維持 `food_travel_save_v2`。
 - 覆蓋層（`ScrollPanel`）捲動拖曳後放開不會觸發按鈕；新的按下會清掉這個狀態。清單用遮罩裁切。
-- 主題：`GameView.applyTheme` 換背景 sprite、渲染器底色、`setButtonColor`，再 `render()`；配色只套用在主畫面（卡片、格子、台子外框、按鈕、提示框），覆蓋層面板維持深色。格子用半透明（`cellAlpha`）讓背景插畫透出來。HUD 文字分兩行（電力、金幣）並加描邊，讓 HUD 能放 4 個按鈕。
+- 主題：`GameView.applyTheme` 換背景 sprite、渲染器底色、`setButtonColor`，再 `render()`；配色只套用在主畫面（卡片、格子、台子外框、按鈕、提示框），覆蓋層面板維持深色。格子用半透明（`cellAlpha`）讓背景插畫透出來。HUD 文字分兩行（電力、金幣）、12px 並加描邊，讓 HUD 能放 5 個按鈕（❓、🎨、食譜、倉庫、商店）。
+- 說明覆蓋層在最上層，變暗層會吞掉點擊；標示區用 `Graphics.cut()` 挖洞。每按「下一步」記一筆看過，「略過」把這輪剩下的全部記為看過。
 
 ## 資料來源與未驗證事項
 
@@ -136,6 +141,7 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts
 - 食譜本（日常／特別）、任務、30 關含 3 個 Boss 關、碎片。
 - 點產出器時棋盤滿／電力不足的提示（電力不足可直接開商店）。
 - 主題切換（經典、台北、紐約、巴黎）。
+- 說明流程（第一次／沒看過的步驟自動顯示，❓ 重看）。
 
 ## 尚未做 / 待辦
 
