@@ -8,7 +8,7 @@ import {
   type Requirement,
   type StoryStage,
 } from "./orders";
-import { getProduct, products, type Product, type ProductEffect } from "./shop";
+import { getProduct, products, purchaseLimit, type Product, type ProductEffect } from "./shop";
 import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, stationOf } from "./registry";
 import { SHARDS_NEEDED, SHARD_RECIPE, getTask, taskProgress, tasks, type TaskDef } from "./tasks";
 import { mulberry32, type Rng } from "./rng";
@@ -43,7 +43,7 @@ export interface GameState {
   nextOrderId: number;
   /** Permanent energy-cap bonus from shop upgrades. */
   maxEnergyBonus: number;
-  /** Ids of `once` products already bought. */
+  /** Ids of limited products, once per purchase (a product bought twice appears twice). */
   purchased: string[];
   boosts: ActiveBoost[];
   /** Generators on each station, STATION_SLOTS entries each. */
@@ -109,7 +109,7 @@ export function newState(now: number): GameState {
   prep[0] = getChain(story.initialUnlocked[0])!.generator.id;
   return {
     board: new Board().cells,
-    energy: { value: 20, updatedAt: now },
+    energy: { value: ENERGY_MAX, updatedAt: now },
     coins: 0,
     stageIndex: 0,
     unlocked: [...story.initialUnlocked],
@@ -243,6 +243,10 @@ export class Game {
     return this.purchased.includes(productId);
   }
 
+  purchaseCount(productId: string): number {
+    return this.purchased.filter((id) => id === productId).length;
+  }
+
   /** Epoch ms when the boost from `productId` ends, or null when not active. */
   boostExpiresAt(productId: string): number | null {
     return this.boosts.find((b) => b.productId === productId)?.expiresAt ?? null;
@@ -356,11 +360,12 @@ export class Game {
     this.tick();
     const product = getProduct(productId);
     if (!product) return { ok: false, reason: "unknown-product" };
-    if (product.once && this.isPurchased(product.id)) return { ok: false, reason: "already-purchased" };
+    const limit = purchaseLimit(product);
+    if (this.purchaseCount(product.id) >= limit) return { ok: false, reason: "already-purchased" };
     if (this.missingRequirement(product.id)) return { ok: false, reason: "requires-other" };
     if (this.coins < product.cost) return { ok: false, reason: "no-coins" };
     this.coins -= product.cost;
-    if (product.once) this.purchased.push(product.id);
+    if (limit !== Infinity) this.purchased.push(product.id);
     this.applyEffect(product.id, product.effect);
     this.tick();
     return { ok: true };

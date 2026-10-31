@@ -19,8 +19,10 @@ export interface Product {
   name: string;
   /** Price in coins. */
   cost: number;
-  /** Can only be bought once per player. */
+  /** Can only be bought once per player (same as limit 1). */
   once?: boolean;
+  /** Most times a player can buy it; unlimited when neither this nor `once` is set. */
+  limit?: number;
   /** Id of a product that must be bought first. */
   requires?: string;
   /** Id of a task that must be completed first. */
@@ -32,6 +34,11 @@ export const products = (shopData as { products: Product[] }).products;
 
 export function getProduct(id: string): Product | undefined {
   return products.find((p) => p.id === id);
+}
+
+/** How many times a product can be bought in total. */
+export function purchaseLimit(p: Product): number {
+  return p.limit ?? (p.once ? 1 : Infinity);
 }
 
 export const STATION_NAMES: Record<StationId, string> = { prep: "料理台", spice: "調味區" };
