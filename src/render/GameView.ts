@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Rectangle, type Text, type FederatedPointerEvent } from "pixi.js";
 import { Board, COLS, ROWS } from "../core/board";
-import { Game, STATIONS, STATION_SLOTS, type StationId } from "../core/game";
+import { Game, STATIONS, STATION_SLOTS, type StationId, type TapResult } from "../core/game";
 import { story, type Requirement } from "../core/orders";
 import { getItem, itemLabel, recipeFor, type RecipeTier } from "../core/registry";
 import { STATION_NAMES } from "../core/shop";
@@ -24,6 +24,15 @@ const ICON_SMALL = 26;
 const STORY_ICON = 32;
 const STORY_COL = 50;
 const TOAST_MS = 2500;
+/** Toasts with a button stay longer so there is time to tap it. */
+const ACTION_TOAST_MS = 4000;
+
+interface Toast {
+  text: string;
+  /** Toasts with the same key are not queued twice; defaults to the text. */
+  key?: string;
+  action?: { label: string; run: () => void };
+}
 
 const CHAIN_COLORS: Record<string, number> = {
   pizza: 0xe8b04a,
@@ -31,6 +40,8 @@ const CHAIN_COLORS: Record<string, number> = {
   croissant: 0xe07a5f,
   salt: 0xc9d3dd,
   spice: 0x9a6b3f,
+  coin: 0xf2c230,
+  energy: 0x5cc8f0,
 };
 
 const STATION_COLORS: Record<StationId, number> = { prep: 0x6b5235, spice: 0x4f6138 };
@@ -55,6 +66,8 @@ export class GameView {
   private readonly recipes: RecipeView;
   private readonly toast = new Container();
   private toastUntil = 0;
+  private toastKey: string | null = null;
+  private readonly toastQueue: Toast[] = [];
   private drag: Drag | null = null;
 
   constructor(
@@ -106,19 +119,52 @@ export class GameView {
     this.updateToast(now);
   }
 
-  /** Show queued game notices one at a time near the middle of the screen. */
+  /** Queue a toast unless the same text is already showing or waiting (e.g. repeated taps on a full board). */
+  private notify(toast: Toast) {
+    const key = toast.key ?? toast.text;
+    if (this.toastKey === key || this.toastQueue.some((t) => (t.key ?? t.text) === key)) return;
+    this.toastQueue.push(toast);
+  }
+
+  /** Show game notices and view toasts one at a time near the middle of the screen. */
   private updateToast(now: number) {
+    for (const text of this.game.notices.splice(0)) this.notify({ text });
     if (now < this.toastUntil) return;
     this.toast.removeChildren().forEach((c) => c.destroy());
-    const msg = this.game.notices.shift();
-    if (!msg) return;
-    const t = makeText(msg, 0, 0, 15, 0xffffff);
-    const w = t.width + 28;
+    this.toastKey = null;
+    const next = this.toastQueue.shift();
+    if (!next) return;
+    const t = makeText(next.text, 0, 0, 15, 0xffffff);
+    const btnW = next.action ? 86 : 0;
+    const w = t.width + 28 + (next.action ? btnW + 8 : 0);
+    const h = Math.max(t.height + 20, next.action ? 44 : 0);
     const x = (VIEW_W - w) / 2;
     const y = BOARD_Y + 110;
-    t.position.set(x + 14, y + 10);
-    this.toast.addChild(new Graphics().roundRect(x, y, w, t.height + 20, 12).fill({ color: 0x000000, alpha: 0.82 }).stroke({ width: 2, color: 0xffd27a }), t);
-    this.toastUntil = now + TOAST_MS;
+    t.position.set(x + 14, y + (h - t.height) / 2);
+    this.toast.addChild(new Graphics().roundRect(x, y, w, h, 12).fill({ color: 0x000000, alpha: 0.85 }).stroke({ width: 2, color: 0xffd27a }), t);
+    // Only a toast with a button takes input; plain ones let taps through to the board.
+    this.toast.eventMode = next.action ? "passive" : "none";
+    if (next.action) {
+      const { run, label } = next.action;
+      addButton(this.toast, { x: x + w - btnW - 8, y: y + 7, w: btnW, h: h - 14 }, label, true, () => {
+        this.toastUntil = 0; // cleared on the next frame, not mid-tap
+        run();
+      });
+    }
+    this.toastKey = next.key ?? next.text;
+    this.toastUntil = now + (next.action ? ACTION_TOAST_MS : TOAST_MS);
+  }
+
+  /** Tell the player why tapping a generator did nothing. */
+  private explainTap(result: TapResult) {
+    if (result.ok) return;
+    if (result.reason === "board-full") {
+      this.notify({ text: "📦 棋盤滿了，先合成或交付騰出空位" });
+    } else if (result.reason === "no-energy") {
+      const secs = Math.ceil(this.game.energy.msToNext(Date.now()) / 1000);
+      const wait = secs > 0 ? `，${secs} 秒後 +1` : "";
+      this.notify({ text: `⚡ 電力不足${wait}`, key: "no-energy", action: { label: "🛒 買電力", run: () => this.shop.open() } });
+    }
   }
 
   private cellRect(i: number): Rect {
@@ -248,7 +294,7 @@ export class GameView {
           node.cursor = "pointer";
           node.on("pointertap", () => {
             if (this.drag) return;
-            g.tapStation(station, slot);
+            this.explainTap(g.tapStation(station, slot));
             this.render();
             this.onChange();
           });
@@ -345,6 +391,10 @@ export class GameView {
     if (d.moved) {
       const to = this.cellAt(p.x, p.y);
       if (to !== null) g.move(d.from, to);
+    } else {
+      // A tap on a dropped coin or energy item collects it.
+      const got = g.collect(d.from);
+      if (got) this.notify({ text: got.kind === "coin" ? `🪙 +${got.amount}` : `⚡ +${got.amount}` });
     }
     this.render();
     this.onChange();

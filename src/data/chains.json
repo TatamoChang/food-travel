@@ -62,5 +62,27 @@
         { "id": "spice_3", "name": "秘製香料" }
       ]
     }
+  ],
+  "rewards": [
+    {
+      "id": "coin",
+      "name": "金幣",
+      "values": [10, 25, 60],
+      "stages": [
+        { "id": "coin_1", "name": "一枚金幣" },
+        { "id": "coin_2", "name": "一袋金幣" },
+        { "id": "coin_3", "name": "一箱金幣" }
+      ]
+    },
+    {
+      "id": "energy",
+      "name": "電力",
+      "values": [2, 5, 12],
+      "stages": [
+        { "id": "energy_1", "name": "電力火花" },
+        { "id": "energy_2", "name": "電力球" },
+        { "id": "energy_3", "name": "電力水晶" }
+      ]
+    }
   ]
 }

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Board, COLS, ROWS } from "../src/core/board";
-import { Energy } from "../src/core/energy";
+import { ENERGY_MAX, Energy } from "../src/core/energy";
 import { Game, STATION_SLOTS, newState, prepSlotSource, type SavedState } from "../src/core/game";
 import { SHARDS_NEEDED, tasks } from "../src/core/tasks";
 import { SPECIAL_ORDER_FROM_STAGE, TIER_REWARD_MULT, generateRandomOrder, itemReward, story, tierCap } from "../src/core/orders";
 import { getAnyChain, getItem, recipeFor, recipes } from "../src/core/registry";
 import { mulberry32 } from "../src/core/rng";
-import { getProduct, products } from "../src/core/shop";
+import { getProduct, products, purchaseLimit } from "../src/core/shop";
 
 describe("story data", () => {
   it("every stage rewards coins and energy", () => {
@@ -155,54 +155,73 @@ describe("Shop energy cap", () => {
     return { g, advance: (ms: number) => (t += ms), clock: () => t };
   };
 
-  it("permanent cap upgrades can only be bought once", () => {
-    const { g } = setup();
-    const p = getProduct("cap_plus_5")!;
-    expect(g.energy.max).toBe(20);
-    expect(g.buy(p.id)).toEqual({ ok: true });
-    expect(g.energy.max).toBe(25);
-    expect(g.energy.value).toBe(20);
+  it("permanent cap upgrades have purchase limits that add up to 100", () => {
+    const { g } = setup(10_000);
+    expect(ENERGY_MAX).toBe(50);
+    expect(g.energy.max).toBe(50);
+    expect(g.energy.value).toBe(50); // new games start full
+    for (let i = 0; i < 4; i++) expect(g.buy("cap_plus_5")).toEqual({ ok: true });
+    expect(g.purchaseCount("cap_plus_5")).toBe(4);
+    expect(g.energy.max).toBe(70);
     const coins = g.coins;
-    expect(g.buy(p.id)).toEqual({ ok: false, reason: "already-purchased" });
+    expect(g.buy("cap_plus_5")).toEqual({ ok: false, reason: "already-purchased" });
     expect(g.coins).toBe(coins);
-    expect(g.isPurchased(p.id)).toBe(true);
+    for (let i = 0; i < 3; i++) expect(g.buy("cap_plus_10")).toEqual({ ok: true });
+    expect(g.buy("cap_plus_10")).toEqual({ ok: false, reason: "already-purchased" });
+    expect(g.energy.max).toBe(100);
+    expect(g.energy.value).toBe(50);
+  });
 
-    expect(g.buy("cap_plus_10").ok).toBe(true);
-    expect(g.energy.max).toBe(35);
+  it("all permanent cap products together reach exactly 100", () => {
+    const total = products
+      .filter((p) => p.effect.type === "maxEnergy")
+      .reduce((n, p) => n + (p.effect.type === "maxEnergy" ? p.effect.amount : 0) * purchaseLimit(p), ENERGY_MAX);
+    expect(total).toBe(100);
+  });
+
+  it("saves from when cap upgrades were once-only keep their single purchase", () => {
+    const s = newState(0);
+    s.purchased = ["cap_plus_5"];
+    s.maxEnergyBonus = 5;
+    s.coins = 1000;
+    const g = new Game(s, () => 0, mulberry32(1));
+    expect(g.purchaseCount("cap_plus_5")).toBe(1);
+    expect(g.buy("cap_plus_5")).toEqual({ ok: true });
+    expect(g.energy.max).toBe(60);
   });
 
   it("a higher cap lets energy regenerate up to it without an instant payout", () => {
     const { g, advance } = setup();
     advance(10 * 60 * MIN); // sit at full energy for a long time
     g.buy("cap_plus_5");
-    expect(g.energy.value).toBe(20);
+    expect(g.energy.value).toBe(50);
     advance(MIN);
     g.energy.sync(advance(0));
-    expect(g.energy.value).toBe(21);
+    expect(g.energy.value).toBe(51);
   });
 
   it("temporary boost raises the cap, expires, and extends when re-bought", () => {
     const { g, advance, clock } = setup();
     g.buy("cap_boost_30m");
-    expect(g.energy.max).toBe(30);
+    expect(g.energy.max).toBe(60);
     expect(g.boostExpiresAt("cap_boost_30m")).toBe(30 * MIN);
 
     advance(10 * MIN);
     g.buy("cap_boost_30m");
     expect(g.boostExpiresAt("cap_boost_30m")).toBe(60 * MIN);
-    expect(g.energy.max).toBe(30);
+    expect(g.energy.max).toBe(60);
 
     g.buy("cap_boost_2h");
-    expect(g.energy.max).toBe(50);
+    expect(g.energy.max).toBe(80);
 
     advance(51 * MIN); // 61 min in: 30m boost gone, 2h boost still on
     g.tick();
     expect(g.boostExpiresAt("cap_boost_30m")).toBeNull();
-    expect(g.energy.max).toBe(40);
+    expect(g.energy.max).toBe(70);
 
     advance(120 * MIN);
     g.tick();
-    expect(g.energy.max).toBe(20);
+    expect(g.energy.max).toBe(50);
     expect(clock()).toBe(181 * MIN);
   });
 
@@ -210,11 +229,11 @@ describe("Shop energy cap", () => {
     const { g, advance } = setup();
     g.buy("cap_boost_30m");
     g.buy("energy_large");
-    expect(g.energy.value).toBe(100);
+    expect(g.energy.value).toBe(130);
     advance(31 * MIN);
     g.tick();
-    expect(g.energy.max).toBe(20);
-    expect(g.energy.value).toBe(100);
+    expect(g.energy.max).toBe(50);
+    expect(g.energy.value).toBe(130);
   });
 
   it("persists upgrades and active boosts through a save", () => {
@@ -223,11 +242,11 @@ describe("Shop energy cap", () => {
     g.buy("cap_boost_30m");
     const snap = JSON.parse(JSON.stringify(g.snapshot()));
     const g2 = new Game(snap, () => 5 * MIN, mulberry32(1));
-    expect(g2.energy.max).toBe(35);
+    expect(g2.energy.max).toBe(65);
     expect(g2.isPurchased("cap_plus_5")).toBe(true);
     expect(g2.boostExpiresAt("cap_boost_30m")).toBe(30 * MIN);
     const g3 = new Game(snap, () => 31 * MIN, mulberry32(1));
-    expect(g3.energy.max).toBe(25);
+    expect(g3.energy.max).toBe(55);
   });
 
   it("loads old saves that lack the new fields", () => {
@@ -236,7 +255,7 @@ describe("Shop energy cap", () => {
     delete old.purchased;
     delete old.boosts;
     const g = new Game(old as ReturnType<Game["snapshot"]>, () => 0, mulberry32(1));
-    expect(g.energy.max).toBe(20);
+    expect(g.energy.max).toBe(50);
   });
 });
 
@@ -283,7 +302,7 @@ describe("Game", () => {
     state.board = new Array(COLS * ROWS).fill("pizza_e");
     const g = new Game(state, () => 0, mulberry32(1));
     expect(g.tapStation("prep", 0)).toEqual({ ok: false, reason: "board-full" });
-    expect(g.energy.value).toBe(20);
+    expect(g.energy.value).toBe(ENERGY_MAX);
   });
 
   it("story delivery is all-or-nothing, then unlocks the next dish", () => {
@@ -303,7 +322,7 @@ describe("Game", () => {
     expect(g.board.cells).not.toContain("pizza_c");
     expect(g.stageIndex).toBe(1);
     expect(g.coins).toBe(story.stages[0].reward);
-    expect(g.energy.value).toBe(20 + story.stages[0].rewardEnergy);
+    expect(g.energy.value).toBe(ENERGY_MAX + story.stages[0].rewardEnergy);
     expect(g.unlocked).toContain("sushi");
     // stage 1 opens prep slot 2, so the rice bucket goes straight onto it
     expect(g.slotsOpen.prep).toBe(2);
@@ -688,5 +707,88 @@ describe("Prep slots 4 and 5", () => {
       s.purchased = ["prep_slot_5"];
     });
     expect(g.slotsOpen.prep).toBe(5);
+  });
+});
+
+describe("Merge drops", () => {
+  /** rng 0 always passes a chance roll, 0.99 never does. */
+  const game = (roll: number, edit?: (s: ReturnType<typeof newState>) => void) => {
+    const s = newState(0);
+    s.unlocked = ["pizza", "sushi", "croissant", "salt", "spice"];
+    edit?.(s);
+    return new Game(s, () => 0, () => roll);
+  };
+  const merge = (g: Game, item: string) => {
+    g.board.cells[20] = item;
+    g.board.cells[21] = item;
+    return g.move(20, 21);
+  };
+
+  it("merging into C or higher can drop a coin and energy next to the result", () => {
+    const g = game(0);
+    expect(merge(g, "pizza_b")).toEqual({ type: "merged", result: "pizza_c" });
+    expect(g.board.count("coin_1")).toBe(1);
+    expect(g.board.count("energy_1")).toBe(1);
+    // drops land in the cells closest to the merged item
+    expect([20, 22, 15, 27]).toContain(g.board.cells.indexOf("coin_1"));
+  });
+
+  it("merging into B can only drop energy; seasonings and drops themselves drop nothing", () => {
+    const g = game(0);
+    merge(g, "sushi_a");
+    expect(g.board.count("coin_1")).toBe(0);
+    expect(g.board.count("energy_1")).toBe(1);
+    const g2 = game(0);
+    merge(g2, "salt_1");
+    merge(g2, "coin_1");
+    expect(g2.board.cells.filter((c) => c === "energy_1" || c === "coin_1")).toHaveLength(0);
+    expect(g2.board.count("coin_2")).toBe(1);
+  });
+
+  it("drops nothing when the roll fails or the board is full", () => {
+    const g = game(0.99);
+    merge(g, "pizza_d");
+    expect(g.board.count("coin_1") + g.board.count("energy_1")).toBe(0);
+    // the merge frees the dragged-from cell: the coin takes it and the energy has nowhere to go
+    const full = game(0, (s) => (s.board = new Array(COLS * ROWS).fill("croissant_e")));
+    expect(merge(full, "pizza_c").type).toBe("merged");
+    expect(full.board.cells[20]).toBe("coin_1");
+    expect(full.board.count("energy_1")).toBe(0);
+    expect(full.board.cells.includes(null)).toBe(false);
+  });
+
+  it("chances are 10% / 5% and rise 5 points per boss cleared", () => {
+    expect(game(0).dropChances).toEqual({ coin: 0.1, energy: 0.05 });
+    const after = (stageIndex: number) => game(0, (s) => (s.stageIndex = stageIndex));
+    expect(after(10).bossesCleared).toBe(1);
+    expect(after(10).dropChances.coin).toBeCloseTo(0.15);
+    expect(after(19).dropChances.energy).toBeCloseTo(0.1);
+    expect(after(30).dropChances.coin).toBeCloseTo(0.25);
+    expect(after(30).dropChances.energy).toBeCloseTo(0.2);
+    // a roll of 0.12 misses a 10% chance but hits 15%
+    const s = newState(0);
+    s.stageIndex = 10;
+    const g = new Game(s, () => 0, () => 0.12);
+    merge(g, "pizza_b");
+    expect(g.board.count("coin_1")).toBe(1);
+    expect(g.board.count("energy_1")).toBe(0);
+  });
+
+  it("tapping a drop collects it; other items are not collected", () => {
+    const g = game(0.99, (s) => {
+      s.coins = 0;
+      s.energy.value = 3;
+      s.board[0] = "coin_3";
+      s.board[1] = "energy_2";
+      s.board[2] = "pizza_a";
+    });
+    expect(g.collect(0)).toEqual({ kind: "coin", amount: 60 });
+    expect(g.coins).toBe(60);
+    expect(g.board.cells[0]).toBeNull();
+    expect(g.collect(1)).toEqual({ kind: "energy", amount: 5 });
+    expect(g.energy.value).toBe(8);
+    expect(g.collect(2)).toBeNull();
+    expect(g.board.cells[2]).toBe("pizza_a");
+    expect(g.collect(3)).toBeNull();
   });
 });

@@ -8,8 +8,8 @@ import {
   type Requirement,
   type StoryStage,
 } from "./orders";
-import { getProduct, products, type Product, type ProductEffect } from "./shop";
-import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, stationOf } from "./registry";
+import { getProduct, products, purchaseLimit, type Product, type ProductEffect } from "./shop";
+import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, rewardValue, stationOf } from "./registry";
 import { SHARDS_NEEDED, SHARD_RECIPE, getTask, taskProgress, tasks, type TaskDef } from "./tasks";
 import { mulberry32, type Rng } from "./rng";
 import type { MoveResult } from "./board";
@@ -20,6 +20,14 @@ export type { StationId };
 export const STATIONS: readonly StationId[] = ["prep", "spice"];
 /** Slots per station; together they fill the top row of the screen (5 prep + 1 spice). */
 export const STATION_SLOTS: Record<StationId, number> = { prep: 5, spice: 1 };
+/** Merging into a dish of at least this stage (C) may drop a coin; at least this stage (B) may drop energy. */
+export const COIN_DROP_MIN_STAGE = 2;
+export const ENERGY_DROP_MIN_STAGE = 1;
+/** Base chance per merge, plus DROP_BOSS_BONUS for each boss stage cleared. */
+export const COIN_DROP_CHANCE = 0.1;
+export const ENERGY_DROP_CHANCE = 0.05;
+export const DROP_BOSS_BONUS = 0.05;
+
 /** Old saves had a 6x8 board whose top row is now the stations. */
 const LEGACY_BOARD_CELLS = COLS * (ROWS + 1);
 
@@ -43,7 +51,7 @@ export interface GameState {
   nextOrderId: number;
   /** Permanent energy-cap bonus from shop upgrades. */
   maxEnergyBonus: number;
-  /** Ids of `once` products already bought. */
+  /** Ids of limited products, once per purchase (a product bought twice appears twice). */
   purchased: string[];
   boosts: ActiveBoost[];
   /** Generators on each station, STATION_SLOTS entries each. */
@@ -109,7 +117,7 @@ export function newState(now: number): GameState {
   prep[0] = getChain(story.initialUnlocked[0])!.generator.id;
   return {
     board: new Board().cells,
-    energy: { value: 20, updatedAt: now },
+    energy: { value: ENERGY_MAX, updatedAt: now },
     coins: 0,
     stageIndex: 0,
     unlocked: [...story.initialUnlocked],
@@ -243,6 +251,10 @@ export class Game {
     return this.purchased.includes(productId);
   }
 
+  purchaseCount(productId: string): number {
+    return this.purchased.filter((id) => id === productId).length;
+  }
+
   /** Epoch ms when the boost from `productId` ends, or null when not active. */
   boostExpiresAt(productId: string): number | null {
     return this.boosts.find((b) => b.productId === productId)?.expiresAt ?? null;
@@ -266,14 +278,46 @@ export class Game {
     return { ok: true, spawnedAt: this.board.spawnNear(generatorOutput(id)!, origin)! };
   }
 
-  /** Drag on the board; counts merges for tasks. */
+  /** Drag on the board; counts merges for tasks and may drop coins or energy next to the result. */
   move(from: number, to: number): MoveResult {
     const r = this.board.move(from, to, (id) => this.isRecipeUnlocked(id));
     if (r.type === "merged") {
       this.made[r.result] = (this.made[r.result] ?? 0) + 1;
+      this.rollDrops(r.result, to);
       this.checkProgress();
     }
     return r;
+  }
+
+  /** Boss stages completed so far. */
+  get bossesCleared(): number {
+    return story.stages.slice(0, this.stageIndex).filter((s) => s.boss).length;
+  }
+
+  /** Current drop chances per qualifying merge. */
+  get dropChances(): { coin: number; energy: number } {
+    const bonus = DROP_BOSS_BONUS * this.bossesCleared;
+    return { coin: COIN_DROP_CHANCE + bonus, energy: ENERGY_DROP_CHANCE + bonus };
+  }
+
+  /** Dish merges may drop a grade-1 coin (stage C+) and/or energy (stage B+) into the nearest empty cell; nothing drops when the board is full. */
+  private rollDrops(result: string, at: number) {
+    const info = getItem(result)!;
+    if (info.category !== "dish") return;
+    const chance = this.dropChances;
+    if (info.stageIndex >= COIN_DROP_MIN_STAGE && this.rng() < chance.coin) this.board.spawnNear("coin_1", at);
+    if (info.stageIndex >= ENERGY_DROP_MIN_STAGE && this.rng() < chance.energy) this.board.spawnNear("energy_1", at);
+  }
+
+  /** Tap a coin or energy item on the board to collect it. Returns what was collected, or null for other items. */
+  collect(idx: number): { kind: "coin" | "energy"; amount: number } | null {
+    const id = this.board.cells[idx];
+    const reward = id ? rewardValue(id) : null;
+    if (!reward) return null;
+    this.board.remove(idx);
+    if (reward.kind === "coin") this.coins += reward.amount;
+    else this.energy.add(reward.amount, this.now());
+    return reward;
   }
 
   /** True when the station slot holds a generator that can go back to the warehouse. */
@@ -356,11 +400,12 @@ export class Game {
     this.tick();
     const product = getProduct(productId);
     if (!product) return { ok: false, reason: "unknown-product" };
-    if (product.once && this.isPurchased(product.id)) return { ok: false, reason: "already-purchased" };
+    const limit = purchaseLimit(product);
+    if (this.purchaseCount(product.id) >= limit) return { ok: false, reason: "already-purchased" };
     if (this.missingRequirement(product.id)) return { ok: false, reason: "requires-other" };
     if (this.coins < product.cost) return { ok: false, reason: "no-coins" };
     this.coins -= product.cost;
-    if (product.once) this.purchased.push(product.id);
+    if (limit !== Infinity) this.purchased.push(product.id);
     this.applyEffect(product.id, product.effect);
     this.tick();
     return { ok: true };

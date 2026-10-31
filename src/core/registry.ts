@@ -1,11 +1,12 @@
 import chainsData from "../data/chains.json";
 import recipesData from "../data/recipes.json";
-import type { ChainDef, ChainsFile, ItemInfo, RecipeDef, RecipesFile, RecipeTier, StationId } from "./types";
+import type { ChainDef, ChainsFile, ItemInfo, RecipeDef, RecipesFile, RecipeTier, RewardChainDef, StationId } from "./types";
 
 const data = chainsData as ChainsFile;
 
 export const chains: readonly ChainDef[] = data.chains;
 export const seasonings: readonly ChainDef[] = data.seasonings;
+export const rewardChains: readonly RewardChainDef[] = data.rewards;
 export const stageLabels: readonly string[] = data.stageLabels;
 export const recipes: readonly RecipeDef[] = (recipesData as RecipesFile).recipes;
 
@@ -27,6 +28,11 @@ function register(chain: ChainDef, category: ItemInfo["category"]) {
 
 for (const chain of chains) register(chain, "dish");
 for (const chain of seasonings) register(chain, "seasoning");
+for (const chain of rewardChains) {
+  chain.stages.forEach((stage, i) => {
+    items.set(stage.id, { id: stage.id, name: stage.name, chainId: chain.id, kind: "stage", category: "reward", stageIndex: i });
+  });
+}
 for (const r of recipes) {
   const dish = items.get(r.dish)!;
   items.set(r.result.id, {
@@ -66,7 +72,7 @@ export function itemLabel(id: string): string {
   if (!info) return "?";
   if (info.kind === "generator") return "產";
   if (info.kind === "special") return "特";
-  return info.category === "seasoning" ? `${info.stageIndex + 1}等` : stageLabels[info.stageIndex];
+  return info.category === "dish" ? stageLabels[info.stageIndex] : `${info.stageIndex + 1}等`;
 }
 
 /** Station a generator belongs on. */
@@ -89,7 +95,16 @@ export function mergeResult(a: string, b: string, canUse: RecipeFilter = dailyOn
   if (a !== b) return null;
   const info = items.get(a);
   if (!info || info.kind !== "stage") return null;
-  return getAnyChain(info.chainId)?.stages[info.stageIndex + 1]?.id ?? null;
+  const stages = getAnyChain(info.chainId)?.stages ?? rewardChains.find((c) => c.id === info.chainId)?.stages;
+  return stages?.[info.stageIndex + 1]?.id ?? null;
+}
+
+/** What tapping a dropped coin or energy item gives, or null for other items. */
+export function rewardValue(id: string): { kind: RewardChainDef["id"]; amount: number } | null {
+  const info = items.get(id);
+  if (info?.category !== "reward") return null;
+  const chain = rewardChains.find((c) => c.id === info.chainId)!;
+  return { kind: chain.id, amount: chain.values[info.stageIndex] };
 }
 
 /** Item id spawned by tapping a generator. */

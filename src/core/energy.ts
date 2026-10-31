@@ -1,4 +1,4 @@
-export const ENERGY_MAX = 20;
+export const ENERGY_MAX = 50;
 export const ENERGY_REGEN_MS = 60_000;
 
 export interface EnergySnapshot {
