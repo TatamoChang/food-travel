@@ -11,6 +11,7 @@
     { "id": "prep_slot_5", "name": "料理台第 5 格", "cost": 3000, "once": true, "requiresTask": "t_sushi_boat", "effect": { "type": "openPrepSlot" } },
     { "id": "theme_taipei", "name": "台灣台北主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "taipei" } },
     { "id": "theme_newyork", "name": "美國紐約主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "newyork" } },
-    { "id": "theme_paris", "name": "法國巴黎主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "paris" } }
+    { "id": "theme_paris", "name": "法國巴黎主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "paris" } },
+    { "id": "theme_halloween", "name": "萬聖節主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "halloween" } }
   ]
 }

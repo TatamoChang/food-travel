@@ -5,8 +5,8 @@ import { themeProduct } from "../src/core/shop";
 import { THEMES, getTheme } from "../src/render/themes";
 
 describe("themes", () => {
-  it("offer classic plus Taipei, New York and Paris, each city with a backdrop", () => {
-    expect(THEMES.map((t) => t.id)).toEqual(["classic", "taipei", "newyork", "paris"]);
+  it("offer classic plus Taipei, New York, Paris and Halloween, each with a backdrop", () => {
+    expect(THEMES.map((t) => t.id)).toEqual(["classic", "taipei", "newyork", "paris", "halloween"]);
     const backdrops = Object.keys(import.meta.glob("../src/assets/themes/*.svg"));
     for (const t of THEMES.slice(1)) expect(backdrops, t.id).toContain(`../src/assets/themes/${t.id}.svg`);
   });

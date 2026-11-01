@@ -85,6 +85,22 @@ export const THEMES: readonly Theme[] = [
     prepFrame: 0xd4a5c0,
     spiceFrame: 0x8fb3d9,
   },
+  {
+    id: "halloween",
+    name: "萬聖節",
+    description: "滿月、鬼屋、蝙蝠與南瓜燈",
+    background: 0x1d1238,
+    cell: 0x1a1028,
+    cellAlpha: 0.62,
+    storyCard: 0x3a1f4f,
+    randomCard: 0x2e2244,
+    cardAlpha: 0.92,
+    accent: 0xffb02e,
+    subtle: 0xc8b0f0,
+    button: 0xe0701e,
+    prepFrame: 0xf28c28,
+    spiceFrame: 0x8bc34a,
+  },
 ];
 
 const KEY = "food_travel_theme";
