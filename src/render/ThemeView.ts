@@ -1,4 +1,6 @@
 import { Graphics } from "pixi.js";
+import type { Game } from "../core/game";
+import { themeProduct } from "../core/shop";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
 import { backdropSprite } from "./icons";
 import { THEMES } from "./themes";
@@ -7,11 +9,15 @@ import { makeText } from "./ui";
 const ROW_H = 132;
 const THUMB = 0.16;
 
-/** Theme picker: a thumbnail, name, description and palette swatches per theme, with a button to apply it. */
+/** Theme picker: thumbnail, name, description and swatches per theme; buy paid themes, apply owned ones. */
 export class ThemeView extends ScrollPanel {
   private current = "";
 
-  constructor(private readonly onApply: (id: string) => void) {
+  constructor(
+    private readonly game: Game,
+    private readonly onApply: (id: string) => void,
+    private readonly onChange: () => void,
+  ) {
     super("主題");
   }
 
@@ -21,7 +27,8 @@ export class ThemeView extends ScrollPanel {
   }
 
   private render() {
-    this.build("選擇喜歡的城市風格", (list) => {
+    const g = this.game;
+    this.build(`🪙 ${g.coins}`, (list) => {
       THEMES.forEach((t, i) => {
         const y = i * ROW_H;
         const active = t.id === this.current;
@@ -43,13 +50,26 @@ export class ThemeView extends ScrollPanel {
         [t.storyCard, t.randomCard, t.button, t.accent, t.prepFrame].forEach((c, k) => {
           list.addChild(new Graphics().roundRect(x + k * 22, y + 62, 18, 18, 4).fill(c).stroke({ width: 1.5, color: 0x1d1712 }));
         });
-        this.button(list, { x, y: y + 88, w: 92, h: 28 }, active ? "使用中" : "套用", !active, () => {
-          this.current = t.id;
-          this.onApply(t.id);
-          this.render();
-        });
+
+        const rect = { x, y: y + 88, w: 100, h: 28 };
+        if (g.isThemeOwned(t.id)) {
+          this.button(list, rect, active ? "使用中" : "套用", !active, () => this.apply(t.id));
+        } else {
+          // Paid theme: buy it, then apply it straight away.
+          const p = themeProduct(t.id)!;
+          this.button(list, rect, `🪙${p.cost} 購買`, g.coins >= p.cost, () => {
+            if (g.buy(p.id).ok) this.apply(t.id);
+            this.onChange();
+          });
+        }
       });
       return THEMES.length * ROW_H;
     });
+  }
+
+  private apply(id: string) {
+    this.current = id;
+    this.onApply(id);
+    this.render();
   }
 }

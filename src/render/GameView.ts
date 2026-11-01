@@ -95,7 +95,7 @@ export class GameView {
     this.shop = new ShopView(game, changed);
     this.warehouse = new WarehouseView(game, changed);
     this.recipes = new RecipeView(game);
-    this.themes = new ThemeView((id) => this.applyTheme(id));
+    this.themes = new ThemeView(game, (id) => this.applyTheme(id), changed);
     this.tutorial = new TutorialView(() => this.theme.accent);
     this.toast.eventMode = "none";
     this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.themes.container, this.toast, this.tutorial.container);
@@ -114,9 +114,9 @@ export class GameView {
     this.tutorial.showUnseen();
   }
 
-  /** Switch theme: palette, button colour and backdrop; remembered on this device. */
+  /** Switch theme: palette, button colour and backdrop; remembered on this device. A theme not owned falls back to classic. */
   applyTheme(id: string) {
-    this.theme = getTheme(id);
+    this.theme = getTheme(this.game.isThemeOwned(id) ? id : "classic");
     saveThemeId(this.theme.id);
     setButtonColor(this.theme.button);
     this.app.renderer.background.color = this.theme.background;

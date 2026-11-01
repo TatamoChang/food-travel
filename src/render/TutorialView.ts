@@ -50,6 +50,12 @@ export class TutorialView {
     else this.render();
   }
 
+  private prev() {
+    if (this.index === 0) return;
+    this.index--;
+    this.render();
+  }
+
   private skip() {
     this.markSeen(this.steps.map((s) => s.id));
     this.close();
@@ -86,8 +92,12 @@ export class TutorialView {
     c.addChild(text);
 
     const last = this.index === this.steps.length - 1;
-    c.addChild(makeText(`${this.index + 1}/${this.steps.length}`, x + PAD, y + bubbleH - 32, 12, 0x8a7a66));
-    if (!last) addButton(c, { x: x + BUBBLE_W - 196, y: y + bubbleH - 40, w: 76, h: 30 }, "略過", true, () => this.skip());
-    addButton(c, { x: x + BUBBLE_W - 112, y: y + bubbleH - 40, w: 98, h: 30 }, last ? "開始玩！" : "下一步 ▶", true, () => this.next());
+    const by = y + bubbleH - 40;
+    c.addChild(makeText(`${this.index + 1}/${this.steps.length}`, x + PAD, by + 8, 12, 0x8a7a66));
+    // Right-aligned row: 上一步 (not on the first step), 略過 (not on the last), 下一步/開始玩.
+    const right = x + BUBBLE_W - PAD;
+    addButton(c, { x: right - 90, y: by, w: 90, h: 30 }, last ? "開始玩！" : "下一步 ▶", true, () => this.next());
+    if (!last) addButton(c, { x: right - 90 - 6 - 56, y: by, w: 56, h: 30 }, "略過", true, () => this.skip());
+    if (this.index > 0) addButton(c, { x: right - 90 - 6 - 56 - 6 - 84, y: by, w: 84, h: 30 }, "◀ 上一步", true, () => this.prev());
   }
 }
