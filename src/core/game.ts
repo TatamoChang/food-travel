@@ -8,7 +8,7 @@ import {
   type Requirement,
   type StoryStage,
 } from "./orders";
-import { getProduct, products, purchaseLimit, type Product, type ProductEffect } from "./shop";
+import { getProduct, products, purchaseLimit, themeProduct, type Product, type ProductEffect } from "./shop";
 import { generatorOutput, getAnyChain, getChain, getItem, recipeFor, rewardValue, stationOf } from "./registry";
 import { SHARDS_NEEDED, SHARD_RECIPE, getTask, taskProgress, tasks, type TaskDef } from "./tasks";
 import { mulberry32, type Rng } from "./rng";
@@ -251,6 +251,12 @@ export class Game {
     return this.purchased.includes(productId);
   }
 
+  /** Free themes (no product) are always owned; paid ones once their product is bought. */
+  isThemeOwned(themeId: string): boolean {
+    const p = themeProduct(themeId);
+    return !p || this.isPurchased(p.id);
+  }
+
   purchaseCount(productId: string): number {
     return this.purchased.filter((id) => id === productId).length;
   }
@@ -453,6 +459,9 @@ export class Game {
         break;
       case "openPrepSlot":
         this.notices.push(`🔓 料理台第 ${this.slotsOpen.prep} 格開放了`);
+        break;
+      case "unlockTheme":
+        this.notices.push("🎨 已解鎖新主題");
         break;
     }
   }

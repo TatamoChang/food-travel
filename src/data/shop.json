@@ -8,6 +8,10 @@
     { "id": "cap_boost_30m", "name": "咖啡加持", "cost": 80, "effect": { "type": "maxEnergyBoost", "amount": 10, "durationMinutes": 30 } },
     { "id": "cap_boost_2h", "name": "美食節狂歡", "cost": 200, "effect": { "type": "maxEnergyBoost", "amount": 20, "durationMinutes": 120 } },
     { "id": "recipe_golden_tart", "name": "黃金可頌塔食譜", "cost": 800, "once": true, "effect": { "type": "unlockRecipe", "recipe": "special_croissant_tart" } },
-    { "id": "prep_slot_5", "name": "料理台第 5 格", "cost": 3000, "once": true, "requiresTask": "t_sushi_boat", "effect": { "type": "openPrepSlot" } }
+    { "id": "prep_slot_5", "name": "料理台第 5 格", "cost": 3000, "once": true, "requiresTask": "t_sushi_boat", "effect": { "type": "openPrepSlot" } },
+    { "id": "theme_taipei", "name": "台灣台北主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "taipei" } },
+    { "id": "theme_newyork", "name": "美國紐約主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "newyork" } },
+    { "id": "theme_paris", "name": "法國巴黎主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "paris" } },
+    { "id": "theme_halloween", "name": "萬聖節主題", "cost": 50, "once": true, "effect": { "type": "unlockTheme", "theme": "halloween" } }
   ]
 }

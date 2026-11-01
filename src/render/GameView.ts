@@ -8,9 +8,12 @@ import { VIEW_H, VIEW_W } from "./layout";
 import { ShopView } from "./ShopView";
 import { RecipeView } from "./RecipeView";
 import { WarehouseView } from "./WarehouseView";
-import { iconSprite } from "./icons";
+import { backdropSprite, iconSprite } from "./icons";
+import { ThemeView } from "./ThemeView";
+import { TutorialView } from "./TutorialView";
+import { getTheme, loadThemeId, saveThemeId, type Theme } from "./themes";
 import { prepSlotHint } from "./slotHint";
-import { addButton, makeText, type Rect } from "./ui";
+import { addButton, makeText, setButtonColor, type Rect } from "./ui";
 
 const CELL = 56;
 const BOARD_X = (VIEW_W - COLS * CELL) / 2;
@@ -44,7 +47,6 @@ const CHAIN_COLORS: Record<string, number> = {
   energy: 0x5cc8f0,
 };
 
-const STATION_COLORS: Record<StationId, number> = { prep: 0x6b5235, spice: 0x4f6138 };
 const TIER_COLORS: Record<RecipeTier, number> = { daily: 0xffd27a, green: 0x4caf50, orange: 0xf08a24, red: 0xe0483a };
 
 interface Drag {
@@ -59,11 +61,16 @@ interface Drag {
 
 export class GameView {
   private readonly root = new Container();
+  /** Theme illustration behind everything. */
+  private readonly backdrop = new Container();
   private readonly layer = new Container();
   private readonly hud: Text;
   private readonly shop: ShopView;
   private readonly warehouse: WarehouseView;
   private readonly recipes: RecipeView;
+  private readonly themes: ThemeView;
+  private readonly tutorial: TutorialView;
+  private theme: Theme = getTheme(loadThemeId());
   private readonly toast = new Container();
   private toastUntil = 0;
   private toastKey: string | null = null;
@@ -75,8 +82,10 @@ export class GameView {
     private readonly game: Game,
     private readonly onChange: () => void,
   ) {
-    this.root.addChild(this.layer);
-    this.hud = makeText("", 12, 14, 13);
+    this.root.addChild(this.backdrop, this.layer);
+    // Two short lines (energy, coins) leave room for the four HUD buttons.
+    this.hud = makeText("", 10, 3, 12);
+    this.hud.style.stroke = { color: 0x1d1712, width: 3 };
     this.root.addChild(this.hud);
     // Panel actions can change the stations and board, so redraw before saving.
     const changed = () => {
@@ -86,8 +95,10 @@ export class GameView {
     this.shop = new ShopView(game, changed);
     this.warehouse = new WarehouseView(game, changed);
     this.recipes = new RecipeView(game);
+    this.themes = new ThemeView(game, (id) => this.applyTheme(id), changed);
+    this.tutorial = new TutorialView(() => this.theme.accent);
     this.toast.eventMode = "none";
-    this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.toast);
+    this.root.addChild(this.shop.container, this.warehouse.container, this.recipes.container, this.themes.container, this.toast, this.tutorial.container);
     app.stage.addChild(this.root);
 
     app.stage.eventMode = "static";
@@ -99,6 +110,19 @@ export class GameView {
     app.ticker.add(() => this.updateHud());
 
     this.fit();
+    this.applyTheme(this.theme.id);
+    this.tutorial.showUnseen();
+  }
+
+  /** Switch theme: palette, button colour and backdrop; remembered on this device. A theme not owned falls back to classic. */
+  applyTheme(id: string) {
+    this.theme = getTheme(this.game.isThemeOwned(id) ? id : "classic");
+    saveThemeId(this.theme.id);
+    setButtonColor(this.theme.button);
+    this.app.renderer.background.color = this.theme.background;
+    this.backdrop.removeChildren().forEach((c) => c.destroy());
+    const art = backdropSprite(this.theme.id);
+    if (art) this.backdrop.addChild(art);
     this.render();
   }
 
@@ -114,8 +138,8 @@ export class GameView {
     const now = Date.now();
     const e = this.game.energy;
     const next = e.msToNext(now);
-    const timer = next > 0 ? ` +1 ${Math.ceil(next / 1000)}s` : "";
-    this.hud.text = `⚡${e.value}/${e.max}${timer}  🪙${this.game.coins}`;
+    const timer = next > 0 ? ` ${Math.ceil(next / 1000)}s` : "";
+    this.hud.text = `⚡${e.value}/${e.max}${timer}\n🪙${this.game.coins}`;
     this.updateToast(now);
   }
 
@@ -141,7 +165,7 @@ export class GameView {
     const x = (VIEW_W - w) / 2;
     const y = BOARD_Y + 110;
     t.position.set(x + 14, y + (h - t.height) / 2);
-    this.toast.addChild(new Graphics().roundRect(x, y, w, h, 12).fill({ color: 0x000000, alpha: 0.85 }).stroke({ width: 2, color: 0xffd27a }), t);
+    this.toast.addChild(new Graphics().roundRect(x, y, w, h, 12).fill({ color: 0x000000, alpha: 0.85 }).stroke({ width: 2, color: this.theme.accent }), t);
     // Only a toast with a button takes input; plain ones let taps through to the board.
     this.toast.eventMode = next.action ? "passive" : "none";
     if (next.action) {
@@ -234,9 +258,11 @@ export class GameView {
   /** Lives in the rebuilt layer so the warehouse count stays current. */
   private drawHudButtons() {
     const n = this.game.warehouse.length;
-    addButton(this.layer, { x: VIEW_W - 200, y: 6, w: 60, h: 28 }, "📖食譜", true, () => this.recipes.open());
-    addButton(this.layer, { x: VIEW_W - 136, y: 6, w: 60, h: 28 }, n > 0 ? `📦倉庫${n}` : "📦倉庫", true, () => this.warehouse.open());
-    addButton(this.layer, { x: VIEW_W - 72, y: 6, w: 60, h: 28 }, "🛒商店", true, () => this.shop.open());
+    addButton(this.layer, { x: VIEW_W - 250, y: 6, w: 30, h: 28 }, "❓", true, () => this.tutorial.replay());
+    addButton(this.layer, { x: VIEW_W - 216, y: 6, w: 30, h: 28 }, "🎨", true, () => this.themes.open(this.theme.id));
+    addButton(this.layer, { x: VIEW_W - 182, y: 6, w: 56, h: 28 }, "📖食譜", true, () => this.recipes.open());
+    addButton(this.layer, { x: VIEW_W - 122, y: 6, w: 56, h: 28 }, n > 0 ? `📦倉庫${n}` : "📦倉庫", true, () => this.warehouse.open());
+    addButton(this.layer, { x: VIEW_W - 62, y: 6, w: 56, h: 28 }, "🛒商店", true, () => this.shop.open());
   }
 
   private drawOrders() {
@@ -245,25 +271,28 @@ export class GameView {
 
     const storyRect: Rect = { x: 12, y: 40, w: VIEW_W - 24, h: 86 };
     const boss = !!stage?.boss;
-    const card = new Graphics().roundRect(storyRect.x, storyRect.y, storyRect.w, storyRect.h, 10).fill(boss ? 0x4a2020 : 0x3d3028);
+    const t = this.theme;
+    const card = new Graphics()
+      .roundRect(storyRect.x, storyRect.y, storyRect.w, storyRect.h, 10)
+      .fill({ color: boss ? 0x4a2020 : t.storyCard, alpha: t.cardAlpha });
     if (boss) card.stroke({ width: 3, color: 0xe0483a });
     this.layer.addChild(card);
     if (stage) {
       const head = `${boss ? "👑 BOSS　" : ""}第 ${g.stageIndex + 1}/${story.stages.length} 關　${stage.title}${stage.rewardShard ? "　🧩+1" : ""}`;
-      this.layer.addChild(makeText(head, 22, 46, 13, boss ? 0xff8a7a : 0xffd27a));
+      this.layer.addChild(makeText(head, 22, 46, 13, boss ? 0xff8a7a : t.accent));
       this.drawStoryRequirements(stage.requirements, 22, 66);
       this.button({ x: 276, y: 68, w: 62, h: 32 }, "交付", g.canDeliverStory(), () => g.deliverStory());
       const reward = makeText(`🪙${stage.reward} ⚡${stage.rewardEnergy}`, 0, 104, 10, 0xd8cbb8);
       reward.x = 307 - reward.width / 2;
       this.layer.addChild(reward);
     } else {
-      this.layer.addChild(makeText("🎉 劇情全部完成！", 22, 70, 16, 0xffd27a));
+      this.layer.addChild(makeText("🎉 劇情全部完成！", 22, 70, 16, t.accent));
     }
 
     g.randomOrders.forEach((o, i) => {
       const rect: Rect = { x: 12 + i * 118, y: 134, w: 112, h: 120 };
-      this.layer.addChild(new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 10).fill(0x2c3a4a));
-      this.layer.addChild(makeText("隨機訂單", rect.x + 8, rect.y + 5, 11, 0x9fc3e8));
+      this.layer.addChild(new Graphics().roundRect(rect.x, rect.y, rect.w, rect.h, 10).fill({ color: t.randomCard, alpha: t.cardAlpha }));
+      this.layer.addChild(makeText("隨機訂單", rect.x + 8, rect.y + 5, 11, t.subtle));
       this.drawRequirements(o.requirements, rect.x + 8, rect.y + 22, 100, 1, 32);
       this.button({ x: rect.x + 8, y: rect.y + 90, w: rect.w - 16, h: 24 }, `交付 🪙${o.reward}`, g.canDeliverRandom(o.id), () => g.deliverRandom(o.id));
     });
@@ -274,8 +303,14 @@ export class GameView {
     const g = this.game;
     for (const station of STATIONS) {
       const first = this.slotRect(station, 0);
-      const color = STATION_COLORS[station];
-      this.layer.addChild(new Graphics().roundRect(first.x, first.y, CELL * STATION_SLOTS[station], CELL, 8).fill(0x2a2420).stroke({ width: 2, color }));
+      const t = this.theme;
+      const color = station === "prep" ? t.prepFrame : t.spiceFrame;
+      this.layer.addChild(
+        new Graphics()
+          .roundRect(first.x, first.y, CELL * STATION_SLOTS[station], CELL, 8)
+          .fill({ color: t.cell, alpha: Math.min(1, t.cellAlpha + 0.2) })
+          .stroke({ width: 2, color }),
+      );
       for (let slot = 0; slot < STATION_SLOTS[station]; slot++) {
         const r = this.slotRect(station, slot);
         const id = g.stations[station][slot];
@@ -318,7 +353,7 @@ export class GameView {
   private drawBoard() {
     for (let i = 0; i < COLS * ROWS; i++) {
       const r = this.cellRect(i);
-      this.layer.addChild(new Graphics().roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6).fill(0x2a2420));
+      this.layer.addChild(new Graphics().roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6).fill({ color: this.theme.cell, alpha: this.theme.cellAlpha }));
     }
     this.game.board.cells.forEach((id, i) => {
       if (!id) return;

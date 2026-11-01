@@ -12,7 +12,9 @@ export type ProductEffect =
   /** Unlocks a special recipe (by result item id). */
   | { type: "unlockRecipe"; recipe: string }
   /** Opens one more prep station slot. */
-  | { type: "openPrepSlot" };
+  | { type: "openPrepSlot" }
+  /** Lets the player apply a visual theme (by theme id). Themes without such a product are free. */
+  | { type: "unlockTheme"; theme: string };
 
 export interface Product {
   id: string;
@@ -34,6 +36,11 @@ export const products = (shopData as { products: Product[] }).products;
 
 export function getProduct(id: string): Product | undefined {
   return products.find((p) => p.id === id);
+}
+
+/** Product that unlocks a theme, if the theme is paid. */
+export function themeProduct(themeId: string): Product | undefined {
+  return products.find((p) => p.effect.type === "unlockTheme" && p.effect.theme === themeId);
 }
 
 /** How many times a product can be bought in total. */
@@ -59,5 +66,7 @@ export function describeEffect(effect: ProductEffect): string {
       return `📖 解鎖食譜「${getItem(effect.recipe)?.name ?? effect.recipe}」`;
     case "openPrepSlot":
       return "🔓 料理台開放 1 格";
+    case "unlockTheme":
+      return "🎨 解鎖主題，可在「🎨」切換";
   }
 }

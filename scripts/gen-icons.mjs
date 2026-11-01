@@ -1,4 +1,4 @@
-// Generates the comic-style item icons in src/assets/icons/ (run: npm run icons).
+// Generates the comic-style item icons in src/assets/icons/ and theme backdrops in src/assets/themes/ (run: npm run icons).
 // Shared rules keep the set consistent: thick dark outline, flat fill with one hard
 // cel shadow (lower right), short white highlights, transparent background,
 // and a yellow sparkle on final-tier and special dishes.
@@ -249,6 +249,112 @@ const icons = {
   energy_3: () =>
     cel("M64 10l34 24v52l-34 30l-34 -30v-52z", "#7fd8f7", "#3fa6d4") + line("M64 10v106M30 34l34 24l34 -24", "#3fa6d4", 3) + bolt(64, 66, 0.7) + hl("M40 40v30") + sparkle(108, 22) + sparkle(18, 92, 0.7),
 };
+
+// ---------- theme backdrops (360x720, same comic rules) ----------
+const THEME_OUT = join(dirname(fileURLToPath(import.meta.url)), "../src/assets/themes");
+const rect = (x, y, w, h) => `M${x} ${y}h${w}v${h}h${-w}z`;
+const bands = (colors) => colors.map(([y, c]) => `<path d="${rect(0, y, 360, 720 - y)}" fill="${c}"/>`).join("");
+const stars = (pts) => pts.map(([x, y, r]) => dot(x, y, r, "#fff4cf")).join("");
+const cloud = (x, y, s, fill = "#ffffff") => g(`translate(${x} ${y}) scale(${s})`, flat("M-30 10q-14 0 -12 -12q2 -12 16 -10q4 -16 22 -14q16 2 18 14q16 -2 18 10q0 12 -14 12z", fill, 3));
+const windows = (x, y, w, h, color, step = 12) => {
+  let out = "";
+  for (let wy = y + 8; wy < y + h - 6; wy += step) for (let wx = x + 6; wx < x + w - 6; wx += 10) out += `<path d="${rect(wx, wy, 4, 5)}" fill="${color}"/>`;
+  return out;
+};
+
+const backdrops = {
+  taipei: () => {
+    const floors = Array.from({ length: 8 }, (_, i) => {
+      const yb = 640 - i * 40;
+      return cel(`M158 ${yb}L150 ${yb - 40}H210L202 ${yb}z`, "#4fb3a5", "#2f8a7e", { w: 4 }) + line(`M160 ${yb - 14}h40M158 ${yb - 26}h44`, "#2f8a7e", 2);
+    }).join("");
+    const lanterns = [40, 110, 250, 320].map((x, i) => {
+      const y = 312 + (i % 2) * 14;
+      return line(`M${x} ${y - 14}v8`, O, 2) + cel(ell(x, y + 8, 12, 14), "#e0483a", "#a8282a", { w: 3 }) + flat(rect(x - 6, y - 7, 12, 4), "#ffd34d", 2) + flat(rect(x - 6, y + 21, 12, 4), "#ffd34d", 2) + line(`M${x} ${y + 25}v10`, "#ffd34d", 2);
+    }).join("");
+    return (
+      bands([[0, "#241a40"], [300, "#33214d"], [460, "#5a2a5a"], [560, "#9a3c52"], [630, "#d9704a"]]) +
+      stars([[30, 60, 2], [90, 30, 1.5], [150, 70, 2], [230, 40, 1.5], [330, 150, 2], [60, 190, 1.5], [280, 220, 2]]) +
+      cel(ell(300, 90, 26, 26), "#ffe9a8", "#e9c870", { w: 4 }) +
+      cel("M0 640q60 -70 120 -24q50 -56 110 -4q60 -52 130 -12V720H0z", "#3a2346", "#2a1834", { w: 4 }) +
+      line("M180 320V220", O, 6) + line("M180 320V222", "#9fe0d6", 2.5) +
+      cel("M170 330l-4 -10h28l-4 10z", "#4fb3a5", "#2f8a7e", { w: 4 }) + floors +
+      cel(rect(140, 640, 80, 60), "#3f9488", "#2a6f66", { w: 4 }) + windows(140, 640, 80, 60, "#ffe9a8", 14) +
+      line("M0 304q90 30 180 0q90 30 180 0", O, 2.5) + lanterns +
+      `<path d="${rect(0, 700, 360, 20)}" fill="#2a1a2e"/>`
+    );
+  },
+  newyork: () => {
+    const back = [[0, 560, 40], [36, 600, 34], [66, 520, 44], [100, 590, 36], [226, 580, 40], [262, 540, 30], [330, 600, 30]]
+      .map(([x, y, w]) => cel(rect(x, y, w, 720 - y), "#5b7290", "#46597a", { w: 3 }) + windows(x, y, w, 720 - y, "#ffe08a", 14)).join("");
+    return (
+      bands([[0, "#2f5f9a"], [200, "#4f86c0"], [400, "#8fc0e0"], [560, "#f2d39a"]]) +
+      cloud(70, 120, 1.2) + cloud(270, 210, 1) + cloud(160, 60, 0.8) +
+      back +
+      line("M180 300V220", O, 5) + line("M180 300V222", "#c5ced8", 2) +
+      cel(rect(170, 300, 20, 40), "#a7b6c8", "#7d8ea4", { w: 4 }) +
+      cel(rect(158, 340, 44, 90), "#a7b6c8", "#7d8ea4", { w: 4 }) + windows(158, 340, 44, 90, "#ffe08a") +
+      cel(rect(146, 430, 68, 110), "#9aaabe", "#74859c", { w: 4 }) + windows(146, 430, 68, 110, "#ffe08a") +
+      cel(rect(132, 540, 96, 160), "#8a9bb0", "#64748a", { w: 4 }) + windows(132, 540, 96, 160, "#ffe08a") +
+      // Statue of Liberty (right)
+      cel(rect(282, 630, 40, 70), "#9aaabe", "#74859c", { w: 4 }) +
+      cel("M290 630l6 -100h12l6 100z", "#5fa88f", "#3f8a72", { w: 4 }) +
+      cel(ell(302, 522, 9, 9), "#5fa88f", "#3f8a72", { w: 3 }) + line("M294 512l-4 -8M302 510v-9M310 512l4 -8", "#3f8a72", 3) +
+      line("M308 548l14 -64", O, 7) + line("M308 548l14 -64", "#5fa88f", 4) +
+      flat("M316 484l6 -6l6 6z", "#5fa88f", 2.5) + flat("M322 476q-8 -10 0 -20q8 10 0 20z", "#ffd34d", 2.5) +
+      `<path d="${rect(0, 700, 360, 20)}" fill="#3a3a3a"/>` + line("M10 710h30M70 710h30M130 710h30M190 710h30M250 710h30M310 710h30", "#f2c230", 3)
+    );
+  },
+  paris: () => {
+    const roofs = [[0, 600, 60], [56, 630, 50], [262, 620, 50], [306, 590, 54]]
+      .map(([x, y, w]) => cel(rect(x, y + 16, w, 700 - y - 16), "#e8dcc8", "#c9b89c", { w: 3 }) + cel(`M${x} ${y + 16}l8 -16h${w - 16}l8 16z`, "#7d8fb0", "#5d6f90", { w: 3 }) + windows(x, y + 16, w, 700 - y - 16, "#8fa3c4", 16)).join("");
+    return (
+      bands([[0, "#5c4d82"], [180, "#8a74a8"], [360, "#d8a0bc"], [540, "#f6cdb8"]]) +
+      cloud(60, 110, 1.1, "#fbe8f0") + cloud(290, 70, 0.9, "#fbe8f0") + cloud(300, 300, 1, "#fbe8f0") +
+      roofs +
+      cel("M112 700Q152 560 166 420L175 262L180 236L185 262L194 420Q208 560 248 700H220Q198 626 180 614Q162 626 140 700z", "#2d3a5c", "#1d2740", { w: 4 }) +
+      line("M128 640l104 0M150 520l60 0M162 420h36M170 330h20", "#4a5a80", 3) +
+      flat(rect(132, 596, 96, 10), "#3d4b72", 3.5) + flat(rect(156, 414, 48, 8), "#3d4b72", 3) + flat(rect(170, 326, 20, 6), "#3d4b72", 2.5) +
+      line("M146 600l20 -170M214 600l-20 -170M150 520l40 -90M210 520l-40 -90", "#4a5a80", 2) +
+      `<path d="${rect(0, 690, 360, 30)}" fill="#6fa8d6"/>` + line("M0 690h360", O, 3) + line("M20 704q10 -6 20 0M90 708q10 -6 20 0M170 702q10 -6 20 0M250 708q10 -6 20 0M320 704q10 -6 20 0", "#d6ecf8", 2.5)
+    );
+  },
+  halloween: () => {
+    const bat = (x, y, s) => g(`translate(${x} ${y}) scale(${s})`, flat("M0 4q-6 -10 -18 -8q4 4 2 10q-6 -4 -12 0q8 2 10 8q6 -6 18 -2q12 -4 18 2q2 -6 10 -8q-6 -4 -12 0q-2 -6 2 -10q-12 -2 -18 8z", "#1d1530", 2));
+    const pumpkin = (x, y, s) =>
+      g(
+        `translate(${x} ${y}) scale(${s})`,
+        line("M0 -24q2 -10 8 -12", "#4a6b2a", 5) +
+          cel(ell(-14, 0, 16, 22), "#f28c28", "#c4621a", { w: 4 }) + cel(ell(14, 0, 16, 22), "#f28c28", "#c4621a", { w: 4 }) + cel(ell(0, 0, 16, 24), "#f7a03a", "#d0701e", { w: 4 }) +
+          flat("M-14 -6l6 -8l6 8z", "#ffe14d", 2.5) + flat("M2 -6l6 -8l6 8z", "#ffe14d", 2.5) +
+          flat("M-16 8q16 14 32 0l-4 6l-4 -4l-4 6l-4 -6l-4 6l-4 -6l-4 4z", "#ffe14d", 2.5),
+      );
+    const grave = (x, y, s) => g(`translate(${x} ${y}) scale(${s})`, cel("M-14 30v-36q0 -14 14 -14q14 0 14 14v36z", "#8a8aa0", "#66667a", { w: 3 }) + line("M-6 -6h12M0 -12v14", "#55556a", 3));
+    return (
+      bands([[0, "#1d1238"], [220, "#2e1a4f"], [420, "#4a2160"], [560, "#7a2e5a"]]) +
+      stars([[24, 50, 1.5], [110, 30, 2], [200, 80, 1.5], [330, 40, 2], [60, 200, 1.5], [300, 250, 1.5]]) +
+      cel(ell(250, 140, 62, 62), "#fff1b0", "#f2d070", { w: 5 }) + dot(232, 124, 9, "#f2d070") + dot(268, 160, 6, "#f2d070") +
+      bat(90, 120, 1.2) + bat(170, 210, 0.9) + bat(310, 300, 1) + bat(220, 60, 0.7) + bat(262, 150, 1.3) +
+      // hill and haunted house
+      cel("M0 560q90 -90 200 -60q90 20 160 -20V720H0z", "#2a1a3a", "#1d1228", { w: 4 }) +
+      cel("M150 520v-110h90v110z", "#3d2a52", "#2a1c3a", { w: 4 }) +
+      cel("M140 412l55 -60l55 60z", "#2a1a3a", "#1d1228", { w: 4 }) +
+      cel("M222 380v-60h22v60z", "#3d2a52", "#2a1c3a", { w: 3 }) + cel("M216 324l17 -24l17 24z", "#2a1a3a", "#1d1228", { w: 3 }) +
+      flat("M168 436h22v26h-22z", "#ffb02e", 3) + flat("M204 436h22v26h-22z", "#ffb02e", 3) + flat("M186 476h20v44h-20z", "#ffb02e", 3) + flat("M228 334h10v14h-10z", "#ffb02e", 2) +
+      line("M179 436v26M168 449h22M215 436v26M204 449h22", "#7a4a1a", 2) +
+      line("M60 520q-4 -40 10 -70M70 450l-14 -14M68 470l14 -10", "#1d1228", 6) +
+      grave(40, 610, 1) + grave(310, 590, 0.9) + grave(100, 640, 0.8) +
+      pumpkin(70, 680, 1) + pumpkin(180, 676, 1.2) + pumpkin(290, 682, 0.95) +
+      `<path d="${rect(0, 704, 360, 16)}" fill="#1d1228"/>`
+    );
+  },
+};
+
+mkdirSync(THEME_OUT, { recursive: true });
+for (const [id, draw] of Object.entries(backdrops)) {
+  uid = 0;
+  writeFileSync(join(THEME_OUT, `${id}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 720">${draw()}</svg>\n`);
+}
 
 mkdirSync(OUT, { recursive: true });
 for (const [id, draw] of Object.entries(icons)) {
