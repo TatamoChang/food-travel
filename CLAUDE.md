@@ -19,8 +19,9 @@
 - 料理：每種 5 階（A 到 E），A+A→B、B+B→C，依此類推，E 為最終型態。
 - 訂單：分劇情與隨機。劇情訂單全部湊齊才能進下一關；隨機訂單從已解鎖料理挑，階數隨關卡提高。
 - 交付：按「交付」鈕一次交完（全有或全無），棋盤物品不足時按鈕灰掉。兩張訂單搶同一批物品時，交付其中一張後另一張可能變灰。
-- 商店：金幣買電力；永久提高電力上限的商品有購買次數上限（大容量電池 +5 可買 4 次、超級電池 +10 可買 3 次，加上基本 50，全買滿上限 100）；也有暫時提高上限的商品。
+- 商店：金幣買電力；永久提高電力上限的商品有購買次數上限（大容量電池 +5 可買 4 次、超級電池 +10 可買 3 次，加上基本 50，全買滿上限 100）；也有暫時提高上限的商品；充電商品（快速充電每 30 秒 +1、超級充電每 10 秒 +1，各持續 30 分鐘，任一種生效中兩種都不能買，充到上限為止）。
 - **新增商品前，先把商品名稱、效果、價格列給使用者確認，再動手改。** 使用者明確要求過這個流程。
+- 商店分頁：⚡電力、📖食譜、🔓擴充、🎨主題，依商品效果自動分類（`productCategory`）。
 - 頂排：料理台 5 格（放料理產出器）＋調味區 1 格（放調味產出器，不上鎖）。料理台第 2、3 格在第 1、11 關過關時開放，第 4 格由任務「壽司船長」（製作 5 個豪華壽司船）開放，第 5 格為商店商品「料理台第 5 格」🪙3000（限 1 次、需先完成該任務）。
 - 劇情共 30 關，每 9 個普通關接 1 個 Boss 關（第 10、20、30 關），Boss 關給 1 個食譜碎片。
 - 合成掉落：合成出 C 以上的料理有機率在旁邊掉 1 等金幣，合成出 B 以上的料理有機率掉 1 等電力（電力機率較低）；兩種都分 3 等、兩個同等合成升一等，點一下領取。每過一個 Boss 關兩種機率各 +5%。棋盤沒空格就不掉落。
@@ -62,7 +63,7 @@ src/
     energy.ts      電力：回復、spend、add（可超過上限）、setMax
     orders.ts      劇情型別、隨機訂單生成 generateRandomOrder（含特製料理）、tierCap、itemReward、TIER_REWARD_MULT
     tasks.ts       任務型別、taskProgress、SHARD_RECIPE
-    shop.ts        商品型別與 describeEffect、STATION_NAMES
+    shop.ts        商品型別與 describeEffect、STATION_NAMES、商店分頁 PRODUCT_CATEGORIES／productCategory
     game.ts        Game 類別：整合以上並管理狀態，含料理台/調味區(stations)、倉庫(warehouse)、
                    食譜解鎖、任務計數(made/randomDelivered)、碎片、提示訊息(notices)、舊存檔遷移；
                    snapshot()/GameState 為存檔格式，SavedState 為可讀入的舊格式
@@ -75,7 +76,7 @@ src/
     themes.ts      主題清單與配色、選擇存取（localStorage key: food_travel_theme）
     GameView.ts    HUD、訂單卡、最上排兩區、棋盤、拖曳與點擊
     Panel.ts       ScrollPanel：覆蓋層共用框架（標題、可拖曳/滾輪捲動的清單、關閉鈕）
-    ShopView.ts    商店覆蓋層
+    ShopView.ts    商店覆蓋層（分頁按鈕，記住上次的分頁）
     WarehouseView.ts 倉庫覆蓋層（收回、放入）
     RecipeView.ts  食譜覆蓋層（日常／特別兩頁）
     ThemeView.ts   主題覆蓋層（縮圖、色票、套用）
@@ -96,7 +97,7 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts、tutorial.t
 - 新主題：在 `themes.ts` 的 `THEMES` 加一筆配色，在 `gen-icons.mjs` 的 `backdrops` 加同 id 的背景插畫並跑 `npm run icons`（沒有背景就只用純色 `background`）。要收費就在 `shop.json` 加 `unlockTheme` 商品（先給使用者確認價格）；沒有商品的主題視為免費。
 - 新說明步驟：在 `tutorialSteps.ts` 的 `TUTORIAL_STEPS` 加一筆（新的 `id`，`target` 用 360x720 座標）。已看過其他步驟的玩家下次開啟只會看到這一步。改了畫面配置記得同步更新 `target`。
 - 新劇情關卡：在 `story.json` 加一筆。需求只能引用「該關之前已解鎖」的料理（測試會檢查）。
-- 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`game.ts` 的 `applyEffect` 加處理。
+- 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`productCategory` 指定分頁（TypeScript 會要求補上）、`game.ts` 的 `applyEffect` 加處理。要新分頁就在 `PRODUCT_CATEGORIES` 加一筆。
 
 ## 目前的數值（暫定，可調）
 
@@ -108,13 +109,14 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts、tutorial.t
 - 特製料理訂單：每行 30% 機率（`SPECIAL_ORDER_CHANCE`）改為特製料理，只挑料理鏈與調味料鏈都已解鎖、料理階數 ≤ cap、且食譜可用的（日常：劇情索引 ≥ 2 `SPECIAL_ORDER_FROM_STAGE`；特別：已解鎖）；獎勵 `round(3 * 2^料理階數 * 倍數)`，倍數 daily 1.5／綠 2／橘 3／紅 5（`TIER_REWARD_MULT`）。
 - 劇情 30 關：金幣 30→3000、電力 5→40（詳見 `story.json`）；Boss 第 10/20/30 關 800/1500/3000 金幣＋1 碎片。第 11 關起要求日常特製料理。
 - 任務：飯糰 5 個、交付 10 張、酥皮麵團 5 個、綜合香料 3 個、交付 30 張（綠）；瑪格麗特披薩 3 個（橘）；豪華壽司船 5 個（料理台第 4 格）。碎片 3 個合成紅色食譜。任務完成記在 `doneTasks`，獎勵只給一次。
-- 商店電力：+5/30 金幣、+20/110、+80/400；永久上限 +5/300 限 4 次、+10/1000 限 3 次（`limit`，全買滿上限 100）；暫時上限 +10/30 分鐘/80、+20/2 小時/200；黃金可頌塔食譜 800（限 1 次）；料理台第 5 格 3000（限 1 次，需先完成任務「壽司船長」，`requiresTask`）；主題台北／紐約／巴黎／萬聖節各 50（限 1 次，`unlockTheme`，商店與主題面板都能買）。
+- 商店電力：+5/30 金幣、+20/110、+80/400；永久上限 +5/300 限 4 次、+10/1000 限 3 次（`limit`，全買滿上限 100）；暫時上限 +10/30 分鐘/80、+20/2 小時/200；快速充電（每 30 秒 +1，30 分鐘）120、超級充電（每 10 秒 +1，30 分鐘）500；黃金可頌塔食譜 800（限 1 次）；料理台第 5 格 3000（限 1 次，需先完成任務「壽司船長」，`requiresTask`）；主題台北／紐約／巴黎／萬聖節各 50（限 1 次，`unlockTheme`，商店與主題面板都能買）。
 
 ## 行為細節與陷阱
 
 - **Pixi 點擊判定**：舞台是 `eventMode = "static"`，子物件會繼承點擊判定，沒有互動屬性的物件（如文字）會吞掉點擊，底下的按鈕或物品就按不到。所以所有文字都必須用 `makeText()`（會設 `eventMode = "none"`）。新增 Text 不要直接 `new Text`。
 - **重建畫面與點擊**：`GameView.render()` 會銷毀並重建所有物件，只在玩家動作後呼叫。不要每幀呼叫，否則按下與放開之間按鈕被銷毀，點擊會失效。需要每幀更新的內容（HUD、商店倒數）只改現有 Text 的文字。
 - **電力超過上限**：`Energy.add` 允許超過上限；超過時不回復，掉到上限以下才繼續。`Energy.setMax` 會先用舊上限結算，避免滿電很久後提高上限造成一次補滿。
+- **充電**：`Game.charge`（存檔欄位 `charge`）記錄目前的回復間隔與結束時間，`Energy.regenMs` 在購買時改成充電間隔（`setRegenMs` 會先用舊速度結算）。過期的充電保留到 `tick()`：先用快速度結算到結束那一刻，再換回 `ENERGY_REGEN_MS`，所以關掉遊戲期間結束的充電也算得對。生效中買任一種充電回傳 `charging`。HUD 倒數前加 🔌 表示充電中。
 - **暫時上限提升**：`Game.tick()` 會清掉過期效果並更新上限；`GameView` 每幀呼叫，`tap`/`buy` 也會呼叫。效果結束後電力超過新上限不會被扣。
 - **存檔相容**：`GameState` 新增欄位時，`Game` 建構子要用 `??` 給預設值，讓舊存檔能讀；格式有破壞性改變才升 `persistence.ts` 的 key 版本。
 - 解鎖的產出器放進所屬區的第一個開放空格，沒空位就進倉庫（會有提示）。`completeStage` 先把 `stageIndex` 加一再解鎖，這樣同一關開放的格子能直接放入該關解鎖的產出器。

@@ -3,6 +3,8 @@
     { "id": "energy_small", "name": "小電池", "cost": 30, "effect": { "type": "energy", "amount": 5 } },
     { "id": "energy_medium", "name": "電力罐", "cost": 110, "effect": { "type": "energy", "amount": 20 } },
     { "id": "energy_large", "name": "電力箱", "cost": 400, "effect": { "type": "energy", "amount": 80 } },
+    { "id": "charge_fast", "name": "快速充電", "cost": 120, "effect": { "type": "charge", "intervalSeconds": 30, "durationMinutes": 30 } },
+    { "id": "charge_super", "name": "超級充電", "cost": 500, "effect": { "type": "charge", "intervalSeconds": 10, "durationMinutes": 30 } },
     { "id": "cap_plus_5", "name": "大容量電池", "cost": 300, "limit": 4, "effect": { "type": "maxEnergy", "amount": 5 } },
     { "id": "cap_plus_10", "name": "超級電池", "cost": 1000, "limit": 3, "effect": { "type": "maxEnergy", "amount": 10 } },
     { "id": "cap_boost_30m", "name": "咖啡加持", "cost": 80, "effect": { "type": "maxEnergyBoost", "amount": 10, "durationMinutes": 30 } },

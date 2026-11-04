@@ -6,7 +6,7 @@ import { SHARDS_NEEDED, tasks } from "../src/core/tasks";
 import { SPECIAL_ORDER_FROM_STAGE, TIER_REWARD_MULT, generateRandomOrder, itemReward, story, tierCap } from "../src/core/orders";
 import { getAnyChain, getItem, recipeFor, recipes } from "../src/core/registry";
 import { mulberry32 } from "../src/core/rng";
-import { getProduct, products, purchaseLimit } from "../src/core/shop";
+import { PRODUCT_CATEGORIES, getProduct, productCategory, products, purchaseLimit } from "../src/core/shop";
 
 describe("story data", () => {
   it("every stage rewards coins and energy", () => {
@@ -142,6 +142,87 @@ describe("Shop", () => {
     expect(g.buy("nope")).toEqual({ ok: false, reason: "unknown-product" });
     expect(g.coins).toBe(p.cost - 1);
     expect(g.energy.value).toBe(3);
+  });
+});
+
+describe("Charging", () => {
+  const SEC = 1000;
+  const MIN = 60 * SEC;
+  const setup = (energy: number, edit?: (s: ReturnType<typeof newState>) => void) => {
+    let t = 0;
+    const s = newState(0);
+    s.coins = 5000;
+    s.energy.value = energy;
+    s.maxEnergyBonus = 150; // cap 200 so the full charge fits
+    edit?.(s);
+    const g = new Game(s, () => t, mulberry32(1));
+    /** Advance the clock, settle charges, and bring energy up to date (the view does this every frame). */
+    const advance = (ms: number) => {
+      t += ms;
+      g.tick();
+      g.energy.sync(t);
+    };
+    return { g, advance };
+  };
+
+  it("sells fast (every 30s) and super (every 10s) charges for 30 minutes, 120 and 500 coins", () => {
+    expect(getProduct("charge_fast")).toMatchObject({ cost: 120, effect: { type: "charge", intervalSeconds: 30, durationMinutes: 30 } });
+    expect(getProduct("charge_super")).toMatchObject({ cost: 500, effect: { type: "charge", intervalSeconds: 10, durationMinutes: 30 } });
+    expect(productCategory(getProduct("charge_fast")!)).toBe("energy");
+  });
+
+  it("regenerates faster while charging, then back to normal", () => {
+    const { g, advance } = setup(0);
+    expect(g.buy("charge_fast")).toEqual({ ok: true });
+    advance(10 * MIN);
+    expect(g.energy.value).toBe(20);
+    expect(g.energy.msToNext(10 * MIN)).toBe(30 * SEC);
+    advance(25 * MIN); // 35 min in: 30 min at 30s (60) + 5 min at 60s (5)
+    expect(g.energy.value).toBe(65);
+    expect(g.activeCharge).toBeNull();
+    expect(g.energy.regenMs).toBe(60 * SEC);
+  });
+
+  it("settles a charge that ended while the game was closed", () => {
+    const { g } = setup(0);
+    g.buy("charge_super");
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const later = new Game(snap, () => 40 * MIN, mulberry32(1)); // 30 min at 10s (180) + 10 min at 60s (10)
+    later.tick();
+    later.energy.sync(40 * MIN);
+    expect(later.energy.value).toBe(190);
+  });
+
+  it("only one charge at a time; both can be bought again once it ends", () => {
+    const { g, advance } = setup(0);
+    g.buy("charge_fast");
+    const coins = g.coins;
+    expect(g.buy("charge_super")).toEqual({ ok: false, reason: "charging" });
+    expect(g.buy("charge_fast")).toEqual({ ok: false, reason: "charging" });
+    expect(g.coins).toBe(coins);
+    advance(30 * MIN);
+    expect(g.buy("charge_super")).toEqual({ ok: true });
+    expect(g.activeCharge?.productId).toBe("charge_super");
+  });
+
+  it("stops at the cap like normal regen", () => {
+    const { g, advance } = setup(45, (s) => (s.maxEnergyBonus = 0));
+    g.buy("charge_super");
+    advance(10 * MIN);
+    expect(g.energy.value).toBe(50);
+  });
+});
+
+describe("Shop categories", () => {
+  it("puts every product under one of the tabs, and no tab is empty", () => {
+    const ids = PRODUCT_CATEGORIES.map((c) => c.id);
+    for (const p of products) expect(ids, p.id).toContain(productCategory(p));
+    for (const c of ids) expect(products.some((p) => productCategory(p) === c), c).toBe(true);
+    expect(productCategory(getProduct("cap_plus_5")!)).toBe("energy");
+    expect(productCategory(getProduct("cap_boost_30m")!)).toBe("energy");
+    expect(productCategory(getProduct("recipe_golden_tart")!)).toBe("recipe");
+    expect(productCategory(getProduct("prep_slot_5")!)).toBe("expand");
+    expect(productCategory(getProduct("theme_paris")!)).toBe("theme");
   });
 });
 
