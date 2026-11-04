@@ -1,5 +1,5 @@
 import { Board, COLS, ROWS, type Cell } from "./board";
-import { ENERGY_MAX, Energy, type EnergySnapshot } from "./energy";
+import { ENERGY_MAX, ENERGY_REGEN_MS, Energy, type EnergySnapshot } from "./energy";
 import {
   RANDOM_ORDER_SLOTS,
   generateRandomOrder,
@@ -38,6 +38,14 @@ export interface ActiveBoost {
   expiresAt: number;
 }
 
+/** Faster energy regen bought in the shop. */
+export interface ActiveCharge {
+  productId: string;
+  intervalMs: number;
+  /** Epoch ms when the charge ends. */
+  expiresAt: number;
+}
+
 export interface GameState {
   /** Normal grid, COLS x ROWS. */
   board: Cell[];
@@ -54,6 +62,8 @@ export interface GameState {
   /** Ids of limited products, once per purchase (a product bought twice appears twice). */
   purchased: string[];
   boosts: ActiveBoost[];
+  /** Active faster-regen charge, if any (kept after expiry until tick() settles it). */
+  charge: ActiveCharge | null;
   /** Generators on each station, STATION_SLOTS entries each. */
   stations: Record<StationId, Cell[]>;
   /** Unlimited storage: generators that are not on a station, and items moved off the board by save migration. */
@@ -73,7 +83,7 @@ export interface GameState {
 /** What may come out of localStorage: current saves, or older ones that lack newer fields. */
 export type SavedState = Omit<
   GameState,
-  "maxEnergyBonus" | "purchased" | "boosts" | "stations" | "warehouse" | "unlockedRecipes" | "made" | "randomDelivered" | "shards" | "doneTasks"
+  "maxEnergyBonus" | "purchased" | "boosts" | "charge" | "stations" | "warehouse" | "unlockedRecipes" | "made" | "randomDelivered" | "shards" | "doneTasks"
 > &
   Partial<GameState> & {
     /** v1 field: generators waiting for a free board cell. */
@@ -104,7 +114,7 @@ export type TapResult =
 
 export type BuyResult =
   | { ok: true }
-  | { ok: false; reason: "unknown-product" | "no-coins" | "already-purchased" | "requires-other" };
+  | { ok: false; reason: "unknown-product" | "no-coins" | "already-purchased" | "requires-other" | "charging" };
 
 export type DeliverResult = { ok: false } | { ok: true; stageCompleted: boolean };
 
@@ -126,6 +136,7 @@ export function newState(now: number): GameState {
     maxEnergyBonus: 0,
     purchased: [],
     boosts: [],
+    charge: null,
     stations: { prep, spice: emptyStation("spice") },
     warehouse: [],
     unlockedRecipes: [],
@@ -156,6 +167,7 @@ export class Game {
   private maxEnergyBonus: number;
   private purchased: string[];
   private boosts: ActiveBoost[];
+  private charge: ActiveCharge | null;
 
   constructor(
     state?: SavedState,
@@ -167,7 +179,9 @@ export class Game {
     this.maxEnergyBonus = s.maxEnergyBonus ?? 0;
     this.purchased = [...(s.purchased ?? [])];
     this.boosts = (s.boosts ?? []).filter((b) => b.expiresAt > now()).map((b) => ({ ...b }));
-    this.energy = new Energy(s.energy, this.currentMax(now()));
+    // An expired charge is kept so tick() can settle regen at the fast rate up to its end.
+    this.charge = s.charge ? { ...s.charge } : null;
+    this.energy = new Energy(s.energy, this.currentMax(now()), this.charge?.intervalMs ?? ENERGY_REGEN_MS);
     this.coins = s.coins;
     this.stageIndex = s.stageIndex;
     this.unlocked = [...s.unlocked];
@@ -239,9 +253,13 @@ export class Game {
     return ENERGY_MAX + this.maxEnergyBonus + this.boosts.reduce((n, b) => (b.expiresAt > t ? n + b.amount : n), 0);
   }
 
-  /** Drop expired boosts and apply the resulting energy cap. Call regularly (e.g. every frame). */
+  /** End an expired charge (regen at the fast rate up to its end, normal after), drop expired boosts and apply the cap. Call regularly (e.g. every frame). */
   tick() {
     const t = this.now();
+    if (this.charge && this.charge.expiresAt <= t) {
+      this.energy.setRegenMs(ENERGY_REGEN_MS, this.charge.expiresAt);
+      this.charge = null;
+    }
     this.boosts = this.boosts.filter((b) => b.expiresAt > t);
     const max = this.currentMax(t);
     if (max !== this.energy.max) this.energy.setMax(max, t);
@@ -259,6 +277,11 @@ export class Game {
 
   purchaseCount(productId: string): number {
     return this.purchased.filter((id) => id === productId).length;
+  }
+
+  /** The running charge, or null. */
+  get activeCharge(): Readonly<ActiveCharge> | null {
+    return this.charge && this.charge.expiresAt > this.now() ? this.charge : null;
   }
 
   /** Epoch ms when the boost from `productId` ends, or null when not active. */
@@ -409,6 +432,7 @@ export class Game {
     const limit = purchaseLimit(product);
     if (this.purchaseCount(product.id) >= limit) return { ok: false, reason: "already-purchased" };
     if (this.missingRequirement(product.id)) return { ok: false, reason: "requires-other" };
+    if (product.effect.type === "charge" && this.activeCharge) return { ok: false, reason: "charging" };
     if (this.coins < product.cost) return { ok: false, reason: "no-coins" };
     this.coins -= product.cost;
     if (limit !== Infinity) this.purchased.push(product.id);
@@ -429,6 +453,7 @@ export class Game {
       maxEnergyBonus: this.maxEnergyBonus,
       purchased: [...this.purchased],
       boosts: this.boosts.map((b) => ({ ...b })),
+      charge: this.charge ? { ...this.charge } : null,
       stations: { prep: [...this.stations.prep], spice: [...this.stations.spice] },
       warehouse: [...this.warehouse],
       unlockedRecipes: [...this.unlockedRecipes],
@@ -452,6 +477,12 @@ export class Game {
         const active = this.boosts.find((b) => b.productId === productId);
         if (active) active.expiresAt += effect.durationMinutes * 60_000;
         else this.boosts.push({ productId, amount: effect.amount, expiresAt: t + effect.durationMinutes * 60_000 });
+        break;
+      }
+      case "charge": {
+        const t = this.now();
+        this.charge = { productId, intervalMs: effect.intervalSeconds * 1000, expiresAt: t + effect.durationMinutes * 60_000 };
+        this.energy.setRegenMs(this.charge.intervalMs, t);
         break;
       }
       case "unlockRecipe":

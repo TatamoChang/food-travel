@@ -138,7 +138,7 @@ export class GameView {
     const now = Date.now();
     const e = this.game.energy;
     const next = e.msToNext(now);
-    const timer = next > 0 ? ` ${Math.ceil(next / 1000)}s` : "";
+    const timer = next > 0 ? ` ${this.game.activeCharge ? "🔌" : ""}${Math.ceil(next / 1000)}s` : "";
     this.hud.text = `⚡${e.value}/${e.max}${timer}\n🪙${this.game.coins}`;
     this.updateToast(now);
   }

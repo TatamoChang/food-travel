@@ -10,8 +10,10 @@ const TAB_H = 44;
 /** Overlay listing shop products by category tab. Add products in src/data/shop.json; tabs come from productCategory(). */
 export class ShopView extends ScrollPanel {
   private tab: ProductCategory = "energy";
-  /** Description labels of active boosts, refreshed every frame for the countdown. */
-  private readonly countdowns = new Map<string, { text: Text; base: string }>();
+  /** Whether the last render showed a running charge; when it ends, re-render so the charge products can be bought again. */
+  private chargeShown = false;
+  /** Description labels with a countdown (cap boosts, charges), refreshed every frame. */
+  private readonly countdowns = new Map<string, { text: Text; base: string; end: () => number | null }>();
 
   constructor(
     private readonly game: Game,
@@ -32,9 +34,13 @@ export class ShopView extends ScrollPanel {
   /** Per-frame refresh of countdown labels; avoids rebuilding buttons mid-click. */
   update() {
     if (!this.isOpen) return;
+    if (this.chargeShown && !this.game.activeCharge) {
+      this.render();
+      return;
+    }
     const now = Date.now();
-    for (const [id, c] of this.countdowns) {
-      const end = this.game.boostExpiresAt(id);
+    for (const c of this.countdowns.values()) {
+      const end = c.end();
       if (end === null) {
         c.text.text = c.base;
         continue;
@@ -46,6 +52,7 @@ export class ShopView extends ScrollPanel {
 
   private render() {
     this.countdowns.clear();
+    this.chargeShown = !!this.game.activeCharge;
     this.build(`🪙 ${this.game.coins}`, (list) => {
       const tabW = (PANEL_W - 24 - 6 * (PRODUCT_CATEGORIES.length - 1)) / PRODUCT_CATEGORIES.length;
       PRODUCT_CATEGORIES.forEach((c, i) => {
@@ -71,7 +78,16 @@ export class ShopView extends ScrollPanel {
         const base = missing ? `需先${missing}` : describeEffect(p.effect);
         const desc = makeText(base, PANEL_X + 24, y + 32, 12, missing ? 0xe8a05f : 0x9fc3e8);
         list.addChild(desc);
-        if (p.effect.type === "maxEnergyBoost") this.countdowns.set(p.id, { text: desc, base });
+        if (p.effect.type === "maxEnergyBoost") this.countdowns.set(p.id, { text: desc, base, end: () => this.game.boostExpiresAt(p.id) });
+        // Only one charge at a time: the running one counts down, the other says to wait.
+        const charge = this.game.activeCharge;
+        const chargeBlocked = p.effect.type === "charge" && !!charge;
+        if (chargeBlocked && charge!.productId === p.id) {
+          this.countdowns.set(p.id, { text: desc, base: "🔌 充電中", end: () => this.game.activeCharge?.expiresAt ?? null });
+        } else if (chargeBlocked) {
+          desc.text = "充電中，結束後才能再買";
+          desc.style.fill = 0xe8a05f;
+        }
 
         const limit = purchaseLimit(p);
         const bought = this.game.purchaseCount(p.id);
@@ -79,7 +95,7 @@ export class ShopView extends ScrollPanel {
         const label = owned ? (limit > 1 ? "已買完" : "已購買") : `🪙${p.cost}`;
         // Products that can be bought several times show the count next to the name.
         if (limit > 1 && limit !== Infinity) list.addChild(makeText(`已購 ${bought}/${limit}`, name.x + name.width + 8, y + 10, 12, 0xd8cbb8));
-        const enabled = !owned && !missing && this.game.coins >= p.cost;
+        const enabled = !owned && !missing && !chargeBlocked && this.game.coins >= p.cost;
         this.button(list, { x: PANEL_X + PANEL_W - 96, y: y + 12, w: 72, h: 34 }, label, enabled, () => {
           this.game.buy(p.id);
           this.render();

@@ -9,6 +9,8 @@ export type ProductEffect =
   | { type: "maxEnergy"; amount: number }
   /** Raises the energy cap for a while; buying again while active extends the time. */
   | { type: "maxEnergyBoost"; amount: number; durationMinutes: number }
+  /** Energy regenerates every `intervalSeconds` for a while (up to the cap); can't be bought while any charge is active. */
+  | { type: "charge"; intervalSeconds: number; durationMinutes: number }
   /** Unlocks a special recipe (by result item id). */
   | { type: "unlockRecipe"; recipe: string }
   /** Opens one more prep station slot. */
@@ -53,6 +55,7 @@ export function productCategory(p: Product): ProductCategory {
     case "energy":
     case "maxEnergy":
     case "maxEnergyBoost":
+    case "charge":
       return "energy";
     case "unlockRecipe":
       return "recipe";
@@ -87,6 +90,8 @@ export function describeEffect(effect: ProductEffect): string {
       return `🔋 電力上限 +${effect.amount}（永久）`;
     case "maxEnergyBoost":
       return `🔋 電力上限 +${effect.amount}，${formatDuration(effect.durationMinutes)}`;
+    case "charge":
+      return `🔌 每 ${effect.intervalSeconds} 秒 +1 電力，${formatDuration(effect.durationMinutes)}`;
     case "unlockRecipe":
       return `📖 解鎖食譜「${getItem(effect.recipe)?.name ?? effect.recipe}」`;
     case "openPrepSlot":

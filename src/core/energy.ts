@@ -14,7 +14,7 @@ export class Energy {
   constructor(
     snap: EnergySnapshot,
     public max = ENERGY_MAX,
-    readonly regenMs = ENERGY_REGEN_MS,
+    public regenMs = ENERGY_REGEN_MS,
   ) {
     this.value = snap.value;
     this.updatedAt = snap.updatedAt;
@@ -45,6 +45,12 @@ export class Energy {
     this.sync(now);
     this.max = n;
     if (this.value >= n) this.updatedAt = now;
+  }
+
+  /** Change the regen interval. Regen up to `now` is settled at the old rate first. */
+  setRegenMs(ms: number, now: number) {
+    this.sync(now);
+    this.regenMs = ms;
   }
 
   /** Grant energy beyond the cap (purchases and rewards are not limited by max). */
