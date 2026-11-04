@@ -6,7 +6,7 @@ import { SHARDS_NEEDED, tasks } from "../src/core/tasks";
 import { SPECIAL_ORDER_FROM_STAGE, TIER_REWARD_MULT, generateRandomOrder, itemReward, story, tierCap } from "../src/core/orders";
 import { getAnyChain, getItem, recipeFor, recipes } from "../src/core/registry";
 import { mulberry32 } from "../src/core/rng";
-import { getProduct, products, purchaseLimit } from "../src/core/shop";
+import { PRODUCT_CATEGORIES, getProduct, productCategory, products, purchaseLimit } from "../src/core/shop";
 
 describe("story data", () => {
   it("every stage rewards coins and energy", () => {
@@ -142,6 +142,19 @@ describe("Shop", () => {
     expect(g.buy("nope")).toEqual({ ok: false, reason: "unknown-product" });
     expect(g.coins).toBe(p.cost - 1);
     expect(g.energy.value).toBe(3);
+  });
+});
+
+describe("Shop categories", () => {
+  it("puts every product under one of the tabs, and no tab is empty", () => {
+    const ids = PRODUCT_CATEGORIES.map((c) => c.id);
+    for (const p of products) expect(ids, p.id).toContain(productCategory(p));
+    for (const c of ids) expect(products.some((p) => productCategory(p) === c), c).toBe(true);
+    expect(productCategory(getProduct("cap_plus_5")!)).toBe("energy");
+    expect(productCategory(getProduct("cap_boost_30m")!)).toBe("energy");
+    expect(productCategory(getProduct("recipe_golden_tart")!)).toBe("recipe");
+    expect(productCategory(getProduct("prep_slot_5")!)).toBe("expand");
+    expect(productCategory(getProduct("theme_paris")!)).toBe("theme");
   });
 });
 

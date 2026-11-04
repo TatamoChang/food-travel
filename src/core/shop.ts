@@ -38,6 +38,31 @@ export function getProduct(id: string): Product | undefined {
   return products.find((p) => p.id === id);
 }
 
+/** Shop tabs, in display order. */
+export type ProductCategory = "energy" | "recipe" | "expand" | "theme";
+export const PRODUCT_CATEGORIES: readonly { id: ProductCategory; label: string }[] = [
+  { id: "energy", label: "⚡電力" },
+  { id: "recipe", label: "📖食譜" },
+  { id: "expand", label: "🔓擴充" },
+  { id: "theme", label: "🎨主題" },
+];
+
+/** Tab a product is listed under, from its effect. */
+export function productCategory(p: Product): ProductCategory {
+  switch (p.effect.type) {
+    case "energy":
+    case "maxEnergy":
+    case "maxEnergyBoost":
+      return "energy";
+    case "unlockRecipe":
+      return "recipe";
+    case "openPrepSlot":
+      return "expand";
+    case "unlockTheme":
+      return "theme";
+  }
+}
+
 /** Product that unlocks a theme, if the theme is paid. */
 export function themeProduct(themeId: string): Product | undefined {
   return products.find((p) => p.effect.type === "unlockTheme" && p.effect.theme === themeId);

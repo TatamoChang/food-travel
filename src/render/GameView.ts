@@ -187,7 +187,7 @@ export class GameView {
     } else if (result.reason === "no-energy") {
       const secs = Math.ceil(this.game.energy.msToNext(Date.now()) / 1000);
       const wait = secs > 0 ? `，${secs} 秒後 +1` : "";
-      this.notify({ text: `⚡ 電力不足${wait}`, key: "no-energy", action: { label: "🛒 買電力", run: () => this.shop.open() } });
+      this.notify({ text: `⚡ 電力不足${wait}`, key: "no-energy", action: { label: "🛒 買電力", run: () => this.shop.open("energy") } });
     }
   }
 
@@ -317,7 +317,7 @@ export class GameView {
         if (slot >= g.slotsOpen[station]) {
           const hint = prepSlotHint(g, slot);
           this.slotHint(r, hint.short, () => {
-            if (g.lockedSlotSource(slot)?.kind === "shop") this.shop.open();
+            if (g.lockedSlotSource(slot)?.kind === "shop") this.shop.open("expand");
             else g.notices.push(prepSlotHint(g, slot).long);
           });
         } else if (!id) {

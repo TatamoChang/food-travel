@@ -107,6 +107,11 @@ export class ScrollPanel {
     this.button(c, { x: PANEL_X + 12, y: PANEL_Y + PANEL_H - 48, w: PANEL_W - 24, h: 36 }, "關閉", true, () => this.close());
   }
 
+  /** Back to the top of the list on the next build (e.g. after switching tabs). */
+  protected resetScroll() {
+    this.scrollY = 0;
+  }
+
   private localY(e: FederatedPointerEvent) {
     return this.container.toLocal(e.global).y;
   }

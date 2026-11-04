@@ -1,13 +1,15 @@
 import { Graphics, type Text } from "pixi.js";
 import type { Game } from "../core/game";
-import { describeEffect, products, purchaseLimit } from "../core/shop";
+import { PRODUCT_CATEGORIES, describeEffect, productCategory, products, purchaseLimit, type ProductCategory } from "../core/shop";
 import { PANEL_W, PANEL_X, ScrollPanel } from "./Panel";
 import { makeText } from "./ui";
 
 const ROW_H = 66;
+const TAB_H = 44;
 
-/** Overlay listing shop products. Add products in src/data/shop.json; the list is rendered from it. */
+/** Overlay listing shop products by category tab. Add products in src/data/shop.json; tabs come from productCategory(). */
 export class ShopView extends ScrollPanel {
+  private tab: ProductCategory = "energy";
   /** Description labels of active boosts, refreshed every frame for the countdown. */
   private readonly countdowns = new Map<string, { text: Text; base: string }>();
 
@@ -18,7 +20,12 @@ export class ShopView extends ScrollPanel {
     super("商店");
   }
 
-  open() {
+  /** Open on `tab` (e.g. energy from the low-energy toast), or on the last tab used. */
+  open(tab?: ProductCategory) {
+    if (tab && tab !== this.tab) {
+      this.tab = tab;
+      this.resetScroll();
+    }
     this.render();
   }
 
@@ -40,8 +47,23 @@ export class ShopView extends ScrollPanel {
   private render() {
     this.countdowns.clear();
     this.build(`🪙 ${this.game.coins}`, (list) => {
-      products.forEach((p, i) => {
-        const y = i * ROW_H;
+      const tabW = (PANEL_W - 24 - 6 * (PRODUCT_CATEGORIES.length - 1)) / PRODUCT_CATEGORIES.length;
+      PRODUCT_CATEGORIES.forEach((c, i) => {
+        const x = PANEL_X + 12 + i * (tabW + 6);
+        if (c.id !== this.tab) {
+          this.button(list, { x, y: 0, w: tabW, h: 32 }, c.label, true, () => this.open(c.id));
+          return;
+        }
+        // Selected tab: gold, not tappable.
+        list.addChild(new Graphics().roundRect(x, 0, tabW, 32, 8).fill(0xffd27a));
+        const t = makeText(c.label, 0, 0, 13, 0x1d1712);
+        t.style.fontWeight = "bold";
+        t.position.set(x + (tabW - t.width) / 2, (32 - t.height) / 2);
+        list.addChild(t);
+      });
+      const shown = products.filter((p) => productCategory(p) === this.tab);
+      shown.forEach((p, i) => {
+        const y = TAB_H + i * ROW_H;
         list.addChild(new Graphics().roundRect(PANEL_X + 12, y, PANEL_W - 24, ROW_H - 6, 10).fill(0x3d3028));
         const name = makeText(p.name, PANEL_X + 24, y + 8, 15);
         list.addChild(name);
@@ -64,7 +86,7 @@ export class ShopView extends ScrollPanel {
           this.onChange();
         });
       });
-      return products.length * ROW_H;
+      return TAB_H + shown.length * ROW_H;
     });
   }
 }

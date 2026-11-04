@@ -21,6 +21,7 @@
 - 交付：按「交付」鈕一次交完（全有或全無），棋盤物品不足時按鈕灰掉。兩張訂單搶同一批物品時，交付其中一張後另一張可能變灰。
 - 商店：金幣買電力；永久提高電力上限的商品有購買次數上限（大容量電池 +5 可買 4 次、超級電池 +10 可買 3 次，加上基本 50，全買滿上限 100）；也有暫時提高上限的商品。
 - **新增商品前，先把商品名稱、效果、價格列給使用者確認，再動手改。** 使用者明確要求過這個流程。
+- 商店分頁：⚡電力、📖食譜、🔓擴充、🎨主題，依商品效果自動分類（`productCategory`）。
 - 頂排：料理台 5 格（放料理產出器）＋調味區 1 格（放調味產出器，不上鎖）。料理台第 2、3 格在第 1、11 關過關時開放，第 4 格由任務「壽司船長」（製作 5 個豪華壽司船）開放，第 5 格為商店商品「料理台第 5 格」🪙3000（限 1 次、需先完成該任務）。
 - 劇情共 30 關，每 9 個普通關接 1 個 Boss 關（第 10、20、30 關），Boss 關給 1 個食譜碎片。
 - 合成掉落：合成出 C 以上的料理有機率在旁邊掉 1 等金幣，合成出 B 以上的料理有機率掉 1 等電力（電力機率較低）；兩種都分 3 等、兩個同等合成升一等，點一下領取。每過一個 Boss 關兩種機率各 +5%。棋盤沒空格就不掉落。
@@ -62,7 +63,7 @@ src/
     energy.ts      電力：回復、spend、add（可超過上限）、setMax
     orders.ts      劇情型別、隨機訂單生成 generateRandomOrder（含特製料理）、tierCap、itemReward、TIER_REWARD_MULT
     tasks.ts       任務型別、taskProgress、SHARD_RECIPE
-    shop.ts        商品型別與 describeEffect、STATION_NAMES
+    shop.ts        商品型別與 describeEffect、STATION_NAMES、商店分頁 PRODUCT_CATEGORIES／productCategory
     game.ts        Game 類別：整合以上並管理狀態，含料理台/調味區(stations)、倉庫(warehouse)、
                    食譜解鎖、任務計數(made/randomDelivered)、碎片、提示訊息(notices)、舊存檔遷移；
                    snapshot()/GameState 為存檔格式，SavedState 為可讀入的舊格式
@@ -75,7 +76,7 @@ src/
     themes.ts      主題清單與配色、選擇存取（localStorage key: food_travel_theme）
     GameView.ts    HUD、訂單卡、最上排兩區、棋盤、拖曳與點擊
     Panel.ts       ScrollPanel：覆蓋層共用框架（標題、可拖曳/滾輪捲動的清單、關閉鈕）
-    ShopView.ts    商店覆蓋層
+    ShopView.ts    商店覆蓋層（分頁按鈕，記住上次的分頁）
     WarehouseView.ts 倉庫覆蓋層（收回、放入）
     RecipeView.ts  食譜覆蓋層（日常／特別兩頁）
     ThemeView.ts   主題覆蓋層（縮圖、色票、套用）
@@ -96,7 +97,7 @@ tests/             registry.test.ts、core.test.ts、themes.test.ts、tutorial.t
 - 新主題：在 `themes.ts` 的 `THEMES` 加一筆配色，在 `gen-icons.mjs` 的 `backdrops` 加同 id 的背景插畫並跑 `npm run icons`（沒有背景就只用純色 `background`）。要收費就在 `shop.json` 加 `unlockTheme` 商品（先給使用者確認價格）；沒有商品的主題視為免費。
 - 新說明步驟：在 `tutorialSteps.ts` 的 `TUTORIAL_STEPS` 加一筆（新的 `id`，`target` 用 360x720 座標）。已看過其他步驟的玩家下次開啟只會看到這一步。改了畫面配置記得同步更新 `target`。
 - 新劇情關卡：在 `story.json` 加一筆。需求只能引用「該關之前已解鎖」的料理（測試會檢查）。
-- 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`game.ts` 的 `applyEffect` 加處理。
+- 新商品：在 `shop.json` 加一筆（`once: true` 限買 1 次，`limit: N` 限買 N 次，兩者都沒有則不限；購買紀錄 `purchased` 每買一次記一筆）。若是新的效果種類，在 `shop.ts` 的 `ProductEffect` 加型別、`describeEffect` 加文字、`productCategory` 指定分頁（TypeScript 會要求補上）、`game.ts` 的 `applyEffect` 加處理。要新分頁就在 `PRODUCT_CATEGORIES` 加一筆。
 
 ## 目前的數值（暫定，可調）
 
